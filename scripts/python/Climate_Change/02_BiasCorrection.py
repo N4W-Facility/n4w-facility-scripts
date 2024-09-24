@@ -20,7 +20,7 @@ def bias_correction(df_obs, p, s, method='delta', factor_Bcsd=None, nbins=10, ex
     - 'scaling_add': Additive scaling between the mean of observations and simulations during the training period.
     - 'scaling_multi': Multiplicative scaling for variables.
     - 'eqm': Empirical Quantile Mapping to adjust the cumulative distribution function (CDF).
-    - 'BCSD': A specific bias correction method based on monthly factors.
+    - 'BCSD': Bias Correction Spatial Disaggregation.
 
     Parameters:
     - df_obs: Observed climate data for the training period.
@@ -70,7 +70,10 @@ def bias_correction(df_obs, p, s, method='delta', factor_Bcsd=None, nbins=10, ex
         s.index = pd.DatetimeIndex(s.index)  # Ensure proper datetime index
         df_ajustado = s.copy()
         for mes in range(1, 13):  # Apply correction for each month
-            df_ajustado[df_ajustado.index.month == mes] *= factor_Bcsd.loc[mes].values[0]
+            try:
+                df_ajustado[df_ajustado.index.month == mes] *= factor_Bcsd.loc[mes].values[0]
+            except:
+                df_ajustado[df_ajustado.index.month == mes] *= factor_Bcsd.loc[mes]
         c = df_ajustado
 
     else:
@@ -99,9 +102,9 @@ def proceso_BCSD(df_obs, p):
     monthly_averages_P = p.groupby(p.index.month).mean()
 
     # Ensure matching column types between dataframes
-    if type(monthly_averages_obs.columns[0]) != type(monthly_averages_P.columns[0]):
-        monthly_averages_obs.columns = monthly_averages_obs.columns.astype(str)
-        monthly_averages_P.columns = monthly_averages_P.columns.astype(str)
+    if type(pd.DataFrame(monthly_averages_obs).columns[0]) != type(pd.DataFrame(monthly_averages_P).columns[0]):
+        pd.DataFrame(monthly_averages_obs).columns = pd.DataFrame(monthly_averages_obs).columns.astype(str)
+        pd.DataFrame(monthly_averages_P).columns = pd.DataFrame(monthly_averages_P).columns.astype(str)
 
     # Calculate adjustment factor
     ajuste_factor_2 = monthly_averages_obs / monthly_averages_P
@@ -174,19 +177,18 @@ def bias_correction_for_station(sta, file_obs, df_model_train, df_model_test, me
 
 
 # Paths to input and output data
-BASE_PATH = r'D:\Dropbox\Trabajos\Actividades_M\PORH\07_Hidrologia_CC/'
-path_cat = os.path.join(BASE_PATH, '01_Caracterizacion_Climatica_Historica')
-path_series_gcm = os.path.join(BASE_PATH, '02_Escenarios_Cambio_Climatico', '01_Series_GCM_raw')
-path_out = os.path.join(BASE_PATH, '02_Escenarios_Cambio_Climatico', '02_Series_Downscaling')
-Name_catalogo = '03_Catalogo_Cumplen.xlsx'
-Name_serie_obs = '02_Datos_Seleccionados.xlsx'
+BASE_PATH = r'C:\Users\miguel.canon\Dropbox\Python Scripts\TNC-N4WF\00_Example/' #Path input
+path_series_gcm = os.path.join(BASE_PATH, '02_Climate_Change_Scenarios', '01_Series_GCM_raw') # do not change
+path_out = os.path.join(BASE_PATH, '02_Climate_Change_Scenarios', '02_Series_Downscaling')# do not change
+Name_catalogo = '03_Catalogo.xlsx'
+Name_serie_obs = '02_Datos_obs.xlsx'
 
 # Dictionaries for variable and catalog mappings
 dict_var = {'Tas': 'tas', 'PT': 'pr'}
 dict_cat = {'Tas': 'TS_1', 'PT': 'PT_4'}
 escenarios = ['ssp126', 'ssp245', 'ssp370', 'ssp585']  # Future climate scenarios
 variables = ['PT', 'Tas']
-meth = 'BCSD'  # Bias correction method
+meth = 'BCSD'  # Methods: 'delta', 'scaling_add', 'scaling_multi', 'eqm', 'BCSD'
 
 if __name__ == '__main__':
     for var in variables:
@@ -200,16 +202,15 @@ if __name__ == '__main__':
         models = next(os.walk(subdir))[1]  # Get model directories
 
         # Load station catalog
-        Catalogo = pd.ExcelFile(os.path.join(path_cat, Name_catalogo)).parse(dict_cat[var], index_col=0)
+        Catalogo = pd.ExcelFile(os.path.join(BASE_PATH, Name_catalogo)).parse(dict_cat[var], index_col=0)
         estaciones = Catalogo.index
 
         try:
-            file_obs = \
-            pd.ExcelFile(os.path.join(path_cat, Name_serie_obs)).parse(dict_cat[var], index_col=0)[
+            file_obs = pd.ExcelFile(os.path.join(BASE_PATH, Name_serie_obs)).parse(dict_cat[var], index_col=0)[
                 estaciones.astype(str)]
         except:
             file_obs = \
-            pd.ExcelFile(os.path.join(path_cat, Name_serie_obs)).parse(dict_cat[var], index_col=0)[
+            pd.ExcelFile(os.path.join(BASE_PATH, Name_serie_obs)).parse(dict_cat[var], index_col=0)[
                 estaciones]
 
         # Save historical observed data
@@ -253,3 +254,4 @@ if __name__ == '__main__':
                 df_gmc = pd.DataFrame(results_dict_gcm)
                 name_out = os.path.join(model_path, f'0{i}_Ds_Series_{es}_{dict_cat[var]}.csv')
                 df_gmc.to_csv(name_out, index=True)
+

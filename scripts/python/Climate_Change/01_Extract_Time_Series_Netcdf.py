@@ -6,7 +6,7 @@ from multiprocessing import Pool
 from functools import partial
 
 
-def get_file_list(directory_path, ext):
+def get_file_list(directory_path, Ext):
     """
     Returns a list of files in a directory with a specific extension.
 
@@ -19,7 +19,13 @@ def get_file_list(directory_path, ext):
     - fullfilename (list): List of all files in the directory.
     """
     fullfilename = os.listdir(directory_path)
-    data_files = [os.path.join(directory_path, f) for f in fullfilename if os.path.splitext(f)[1] == ext]
+    lsfiles = []
+    data_files = []
+    for f in fullfilename:
+        (shortname, ext) = os.path.splitext(f)
+        if ext == Ext:
+            lsfiles.append(shortname)
+            data_files.append(directory_path + '\\' +shortname)
     return data_files, fullfilename
 
 
@@ -38,8 +44,9 @@ def obtener_indices_tiempo(ruta, archivos):
     def indice_tiempo_de_archivo(ruta_completa):
         with xr.open_dataset(ruta_completa, engine='netcdf4') as ds:
             try:
-                return ds.indexes['time'].to_datetimeindex()
-            except KeyError:
+                ds.indexes['time'].to_datetimeindex()
+                return ds.indexes['time']
+            except:
                 return ds.indexes['time']
 
     indices_tiempo = [indice_tiempo_de_archivo(os.path.join(ruta, archivo)) for archivo in archivos]
@@ -178,7 +185,7 @@ def main(base_path, path_cat, catalog_file, path_out, variables, dict_var, dict_
             escenarios = ['historical', 'ssp126', 'ssp370', 'ssp245', 'ssp585']  # Climate scenarios
 
             # Output path for results
-            output_path = os.path.join(path_out, '02_Escenarios_Cambio_Climatico', '01_Series_GCM_raw', m,
+            output_path = os.path.join(path_out, '02_Climate_Change_Scenarios', '01_Series_GCM_raw', m,
                                        dict_cat[var])
             os.makedirs(output_path, exist_ok=True)
 
@@ -208,9 +215,9 @@ def main(base_path, path_cat, catalog_file, path_out, variables, dict_var, dict_
 
 # Define paths and dictionaries - adjust these variables as needed for your project
 path = r'D:\CMIP6/'
-path_cat = r'/'
-catalog_file = '03_Catalogo_Cumplen.xlsx'
-path_out = r'/'
+path_cat = r'/' #Path input
+catalog_file = '03_Catalogo.xlsx' #example catalogo for statios, important latitude and longitude
+path_out = r'/' #path output
 
 # Dictionary mapping user-friendly names to NetCDF variable keys
 dict_var = {'Tas': 'tas', 'PT': 'pr'}
