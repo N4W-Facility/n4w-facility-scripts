@@ -127,7 +127,7 @@ variable_Dict = {'PT_4': 4,'TS_1': 1,'TS_2': 1, 'TS_8': 1,
                  'ETP': 0,'ETR': 0 }
 
 
-BASE_PATH = r'C:\Users\miguel.canon\Dropbox\Python Scripts\TNC-N4WF\00_Example/'# path input project 
+BASE_PATH = r'D:\Cambio_Climatico_Mendoza/'# path input project
 
 path_series = os.path.join(BASE_PATH, '02_Climate_Change_Scenarios', '02_Series_Downscaling')# do not change
 
