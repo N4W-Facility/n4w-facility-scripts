@@ -47,7 +47,7 @@ def main():
     #0x0120000B41966A7A91A54A802AC5FC9CFB0DC2
     pause = "stop"
 
-    #Demo Databricks SDK
+    #Demo Databricks SDK - may be easier to get a file this way
     #w = WorkspaceClient()
     #created_table = w.tables.get(full_name="curated_nature_for_water_stg.reports.contracting")
     
