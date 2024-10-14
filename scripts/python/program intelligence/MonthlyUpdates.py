@@ -18,6 +18,7 @@ USERNAME = config_data['kobo_username']
 IMPLEMENTATION_ACTIVITY_FORM_UID = config_data["kobo_impl_activity_form_uid"]
 DATABRICKS_IMPL_ACTIVITY_UNPROCESSED_FILE_PATH = config_data["databricks_impl_activity_unprocessed_path"]
 
+#Kobo Methods
 def fetch_kobo_data(url, token, api_version, form_uid): 
     # Initialize the Manager object
     km = pykobo.Manager(url=url, api_version=api_version, token=token)
@@ -36,8 +37,15 @@ def fetch_kobo_data(url, token, api_version, form_uid):
         print("Key Error warning - ignore")
     except:
         print("unable to fetch_data")
-
     return kobo_form.data
+
+def delete_kobo_data(url, token): 
+    try:
+        headers = {'Authorization': f'Token {token}'}
+        response = requests.delete(url, headers=headers)
+        json_response = json.loads(response.text)
+    except:
+        print("Unable to delete kobo data. Please do so manually.")
 
 def fetch_kobo_media_files(url, token):
     try:
@@ -60,14 +68,14 @@ def fetch_kobo_media_content(url, token):
         print("Unable to fetch media")
     return media
 
-def delete_kobo_media_files(url, token, existing_file_id):
+def delete_kobo_media_file(url, token, existing_file_id):
     try:
         headers = {'Authorization': f'Token {token}'}
         response = requests.delete(f'{url}/{existing_file_id}', headers=headers)
     except:
         print("Unable to delete file")
 
-def upload_kobo_media_files(url, token, new_data, filename): 
+def upload_kobo_media_file(url, token, new_data, filename): 
     #binary encode new file contents
     temp_data = f'./{filename}.csv'
     new_data.to_csv(temp_data)
@@ -167,10 +175,10 @@ def main():
     #2a. Fetch existing Kobo csv files content
     existing_polygons = fetch_kobo_media_content(existing_polygon_file['content'],KOBO_TOKEN)
     new_polygon_file_content = merge_polygon_choices(impl_activity_form_data,existing_polygons)
-    #2b. Delete old polygons csv file in Kobo media library
-    delete_kobo_media_files(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/files',KOBO_TOKEN,existing_polygon_file_id)    
-    #2c. Upload new polygons csv file in Kobo media library
-    upload_kobo_media_files(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN,new_polygon_file_content,'programs_implementation_polygons')
+    #2b. Delete old polygons csv file from Kobo media library
+    delete_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/files',KOBO_TOKEN,existing_polygon_file_id)    
+    #2c. Upload new polygons csv file to Kobo media library
+    upload_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN,new_polygon_file_content,'programs_implementation_polygons')
     #2d. Redeploy Implementation Activity form
     redeploy_kobo_form(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN)
 
@@ -191,6 +199,7 @@ def main():
     
 
     #6. Delete data in Kobo
+    delete_kobo_data(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/data',KOBO_TOKEN)   
 
 if __name__ == '__main__':
     main()
