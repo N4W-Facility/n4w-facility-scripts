@@ -1,3 +1,4 @@
+import datetime
 import pandas as pd
 from dotenv import load_dotenv, dotenv_values
 #from databricks.connect import DatabricksSession
@@ -197,6 +198,9 @@ def main():
     redeploy_kobo_form(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN)
 
     #3. Create Excel Output (Implementation_Activity.xlsx)
+    impl_activity_form_data.columns = impl_activity_form_data.columns.str.removeprefix("impl_activity_")
+    impl_activity_start_date = datetime.datetime.strptime(impl_activity_form_data['startdate'],'%Y-%m-%d')
+    impl_activity_form_data['ID'] = impl_activity_form_data['program'] + impl_activity_form_data['nbs'] + str(impl_activity_form_data['polygon']) + str(impl_activity_start_date.month) + str(impl_activity_start_date.year)
     impl_activity_form_data.to_excel("Implementation_Activity.xlsx","Implementation Activity")
 
     #4. Upload Excel Output to Databricks Volume (unprocessed folder)
