@@ -6,6 +6,7 @@ import pykobo
 import json
 import requests
 import io
+import urllib.request
 
 config_data = []
 with open('config.json', 'r') as config_file:
@@ -123,7 +124,7 @@ def redeploy_kobo_form(asset_url, token):
     except:
         print("could not redeploy form")
 
-def merge_polygon_choices(new_choice_data, existing_choice_data):
+def merge_polygon_choices(new_choice_data, existing_choice_data, token):
     # Loop through new data and create new csv entries
     new_polygons = pd.DataFrame(columns=['impl_activity_program','impl_activity_polygon','impl_activity_plan','impl_activity_full_polygon'],data=None)
     for index, row in new_choice_data.iterrows():
@@ -155,6 +156,16 @@ def merge_polygon_choices(new_choice_data, existing_choice_data):
                 'implementation_polygon': new_max_subdivision,
                 'implementation_plan': impl_activity_plan
             }
+            # Also download provided shapefile
+            try:
+                headers = {'Authorization': f'Token {token}'}
+                url = row['impl_activity_new_subpolygon_file_URL']
+                request = urllib.Request(url)
+                request.add_header(headers)   
+                urllib.request.urlretrieve(url, f'./UnprocessedShapefiles/{new_max_subdivision}')
+            except:
+                print("Unable to download and save provided shapefile")
+            
 
     #Merge new and old polygons, and delete any duplicates
     updated_polygons = pd.concat([existing_choice_data, new_polygons], ignore_index=True)
@@ -174,7 +185,7 @@ def main():
     #2. Update Kobo csv: polygon choices for implementation activity
     #2a. Fetch existing Kobo csv files content
     existing_polygons = fetch_kobo_media_content(existing_polygon_file['content'],KOBO_TOKEN)
-    new_polygon_file_content = merge_polygon_choices(impl_activity_form_data,existing_polygons)
+    new_polygon_file_content = merge_polygon_choices(impl_activity_form_data,existing_polygons, KOBO_TOKEN)
     #2b. Delete old polygons csv file from Kobo media library
     delete_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/files',KOBO_TOKEN,existing_polygon_file_id)    
     #2c. Upload new polygons csv file to Kobo media library
@@ -195,11 +206,12 @@ def main():
     except:
         print("unable to upload file to Databricks volume")
 
+    #6. Download shapefiles (keep in other file)
+
     #5. Run Relevant Databricks Jobs to update table data
     
-
-    #6. Delete data in Kobo
-    delete_kobo_data(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/data',KOBO_TOKEN)   
+    #6. Merge new shapefiles into existing using "UnionShapefiles" methods
+    #7. Delete data in Kobo using "DeleteKoboData" methods
 
 if __name__ == '__main__':
     main()
