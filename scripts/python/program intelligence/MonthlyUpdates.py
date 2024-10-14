@@ -125,26 +125,30 @@ def redeploy_kobo_form(asset_url, token):
         print("could not redeploy form")
 
 def merge_polygon_choices(new_choice_data, existing_choice_data, token):
-    # Loop through new data and create new csv entries
+    # Create Dataframe to store new polygon records
     new_polygons = pd.DataFrame(columns=['impl_activity_program','impl_activity_polygon','impl_activity_plan','impl_activity_full_polygon'],data=None)
+    # Loop through new data and create new polygon records 
     for index, row in new_choice_data.iterrows():
         impl_activity_program = row['impl_activity_program']
         impl_activity_polygon = row['impl_activity_polygon']
         impl_activity_plan = row['impl_activity_plan']
         impl_activity_full_polygon = row['impl_activity_full_polygon']
 
-        # If no existing implementation plan, assume new polygon
-        if(impl_activity_plan == 0):
-            new_polygons.loc[len(new_polygons.index)] = {
-                'id': len(new_polygons.index),
-                'program': impl_activity_program,
-                'implementation_polygon': impl_activity_polygon,
-                'implementation_plan': 0
-            }
+        # If no existing implementation plan, assume new polygon?
+        #if(impl_activity_plan == 0):
+        #    new_polygons.loc[len(new_polygons.index)] = {
+        #        'id': len(new_polygons.index),
+        #        'program': impl_activity_program,
+        #        'implementation_polygon': impl_activity_polygon,
+        #        'implementation_plan': 0
+        #    }
 
         # If marked as not full polygon, create new subdivision (increase letter)
         if(impl_activity_plan == 1 and impl_activity_full_polygon == 'no'):
-            existing_max_subdivision = max(existing_choice_data[['implementation_polygon'].startswith(impl_activity_polygon)])
+            # Check both in preexisting and polygons, and new polygons created during this program run
+            existing_polygon_subdivisions = existing_choice_data[['implementation_polygon'].startswith(impl_activity_polygon)]['implementation_polygon'] \
+                + new_polygons.startswith(impl_activity_polygon)['implementation_polygon']
+            existing_max_subdivision = max(existing_polygon_subdivisions)
             existing_max_suffix = existing_max_subdivision.replace(impl_activity_polygon,"")
             # If no existing subdivisions, add "A" to end. Else implement letter by 1
             # NOTE: no more than 26 divisions at each "level" allowed!
@@ -166,7 +170,6 @@ def merge_polygon_choices(new_choice_data, existing_choice_data, token):
             except:
                 print("Unable to download and save provided shapefile")
             
-
     #Merge new and old polygons, and delete any duplicates
     updated_polygons = pd.concat([existing_choice_data, new_polygons], ignore_index=True)
     updated_polygons.drop_duplicates(inplace=True)
@@ -206,10 +209,9 @@ def main():
     except:
         print("unable to upload file to Databricks volume")
 
-    #6. Download shapefiles (keep in other file)
-
     #5. Run Relevant Databricks Jobs to update table data
     
+
     #6. Merge new shapefiles into existing using "UnionShapefiles" methods
     #7. Delete data in Kobo using "DeleteKoboData" methods
 
