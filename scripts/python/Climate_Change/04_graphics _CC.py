@@ -44,7 +44,7 @@ def read_all_xlsfiles_day(modelos,escenarios,path,var):
 
 def add_leap(df,tipo='presente'):
     if tipo=='presente':
-        start = '1970-01-01'
+        start = '2000-01-01'
         end = '2020-12-31'
     else:
         start = '2015-01-01'
@@ -274,7 +274,7 @@ def series_grafica(sta,variable, all_result_daily, modelos, escenarios,path_out)
     return
 
 
-BASE_PATH = r'C:\Users\miguel.canon\Dropbox\Python Scripts\TNC-N4WF\00_Example/'# path input project
+BASE_PATH = r'D:\Cambio_Climatico_Mendoza/'# path input project
 
 
 models = ['ACCESS-ESM1-5','CanESM5','CESM2','EC-Earth3','MIROC6','MPI-ESM1-2-LR','MRI-ESM2-0']

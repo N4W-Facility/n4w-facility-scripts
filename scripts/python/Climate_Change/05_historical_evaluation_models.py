@@ -8,16 +8,9 @@ import matplotlib.pyplot as plt
 from matplotlib.projections import PolarAxes
 import mpl_toolkits.axisartist.grid_finder as gf
 import mpl_toolkits.axisartist.floating_axes as fa
-from matplotlib import gridspec
-from rasterio.io import MemoryFile
-from affine import Affine
 matplotlib.style.use('ggplot')
 import os
-import geopandas as gpd
-import rasterio
-from rasterio.mask import mask
-from sklearn.metrics import r2_score
-import warnings
+
 
 # Function to read monthly Excel files for different models and scenarios
 def read_all_xlsfiles_m(models, scenarios, path, var):
@@ -34,9 +27,16 @@ def read_all_xlsfiles_m(models, scenarios, path, var):
     - Dictionary where keys are model names and values are data for each scenario.
     """
     list_file = {}
-    for mn in models:
-        file = pd.ExcelFile(path + 'Monthly_Series_' + mn + '_' + var + '.xlsx')
-        list_file[mn] = {esc: file.parse(esc, index_col=0).loc[:'31-12-2100'] for esc in scenarios}
+    esc = escenarios
+    for mn in models[0:]:
+        file = pd.ExcelFile(path + 'Series_Mensuales_' + mn + '_' + var + '.xlsx')
+        list_file[mn] = {
+            esc[0]: file.parse(esc[0], index_col=0).loc[:'31-12-2100'],
+            esc[1]: file.parse(esc[1], index_col=0).loc[:'31-12-2100'],
+            esc[2]: file.parse(esc[2], index_col=0).loc[:'31-12-2100'],
+            esc[3]: file.parse(esc[3], index_col=0).loc[:'31-12-2100'],
+            esc[4]: file.parse(esc[4], index_col=0).loc[:'31-12-2100'],
+            esc[5]: file.parse(esc[5], index_col=0).loc[:'31-12-2100']}
     return list_file
 
 # Function to read yearly Excel files for different models and scenarios
@@ -54,9 +54,16 @@ def read_all_xlsfiles_yearly(models, scenarios, path, var):
     - Dictionary where keys are model names and values are data for each scenario.
     """
     list_file = {}
-    for mn in models:
+    esc = escenarios
+    for mn in models[0:]:
         file = pd.ExcelFile(path + 'Yearly_Series_' + mn + '_' + var + '.xlsx')
-        list_file[mn] = {esc: file.parse(esc, index_col=0).loc[:'31-12-2100'] for esc in scenarios}
+        list_file[mn] = {
+            esc[0]: file.parse(esc[0], index_col=0).loc[:'31-12-2100'],
+            esc[1]: file.parse(esc[1], index_col=0).loc[:'31-12-2100'],
+            esc[2]: file.parse(esc[2], index_col=0).loc[:'31-12-2100'],
+            esc[3]: file.parse(esc[3], index_col=0).loc[:'31-12-2100'],
+            esc[4]: file.parse(esc[4], index_col=0).loc[:'31-12-2100'],
+            esc[5]: file.parse(esc[5], index_col=0).loc[:'31-12-2100']}
     return list_file
 
 # Function to read daily CSV files for different models and scenarios
@@ -74,9 +81,16 @@ def read_all_xlsfiles_day(models, scenarios, path, var):
     - Dictionary where keys are model names and values are data for each scenario.
     """
     list_file = {}
-    for mn in models:
-        new_path = path + mn + '/' + var + '/'
-        list_file[mn] = {esc: pd.read_csv(new_path + f'Ds_Series_{esc}_{var}.csv', index_col=0).loc[:'31-12-2100'] for esc in scenarios}
+    esc = escenarios
+    for mn in models[0:]:
+        new_path = path+mn+'/'+var+'/'
+        list_file[mn] = {esc[0]: pd.read_csv(path + '01_Series_historical-obs_' +  var + '.csv', index_col=0).loc[:'31-12-2100'],
+            esc[1]: pd.read_csv(new_path  + '02_Ds_Series_historical-gcm_' +  var + '.csv', index_col=0).loc[:'31-12-2100'],
+            esc[2]: pd.read_csv(new_path  + '03_Ds_Series_ssp126_' +  var + '.csv', index_col=0).loc[:'31-12-2100'],
+            esc[3]: pd.read_csv(new_path  + '04_Ds_Series_ssp245_' +  var + '.csv', index_col=0).loc[:'31-12-2100'],
+            esc[4]: pd.read_csv(new_path  + '05_Ds_Series_ssp370_' +  var + '.csv', index_col=0).loc[:'31-12-2100'],
+            esc[5]: pd.read_csv(new_path  + '06_Ds_Series_ssp585_' +  var + '.csv', index_col=0).loc[:'31-12-2100']}
+
     return list_file
 
 # Function to calculate the convergence factor of a model compared to other models
@@ -166,7 +180,7 @@ def ok_to_csv_m(df):
     return df_result
 
 # Function to add leap years and interpolate missing data
-def add_leap(df, start='1980-01-01', end='2014-12-31'):
+def add_leap(df, start='2000-01-01', end='2014-12-31'):
     """
     Adds leap years to the dataset and interpolates any missing values.
 
@@ -197,8 +211,8 @@ def taylor_skill_score(obser_df, model):
     Returns:
     - Taylor Skill Score for the model.
     """
-    obser_df = obser_df.loc['1980-01-01':'2014-12-31']
-    model = model.loc['1980-01-01':'2014-12-31']
+    obser_df = obser_df.loc['2000-01-01':'2014-12-31']
+    model = model.loc['2000-01-01':'2014-12-31']
 
     df_model = add_leap(model)
     observations = add_leap(obser_df)
@@ -365,12 +379,12 @@ def graphics_taylor_evaluation(data_obs, data_obs_year, input_hist_models_year, 
     """
     hist_models_Day = input_hist_models
     hist_models_year = input_hist_models_year
-    select_models_day = [add_leap(his_model).loc['1980-01-01':'2014-12-31'] for his_model in hist_models_Day]
-    select_models_year = [his_model.loc['1980':'2014'] for his_model in hist_models_year]
+    select_models_day = [add_leap(his_model).loc['2000-01-01':'2014-12-31'] for his_model in hist_models_Day]
+    select_models_year = [his_model.loc['2000':'2014'] for his_model in hist_models_year]
     for sta in data_obs.columns:
         print(sta)
-        obs_data = add_leap(data_obs[sta]).loc['1980-01-01':'2014-12-31'].interpolate(method='linear',limit_direction='both')
-        obs_year = data_obs_year[sta].loc['1980':'2014'].interpolate(method='linear', limit_direction='both')
+        obs_data = add_leap(data_obs[sta]).loc['2000-01-01':'2014-12-31'].interpolate(method='linear',limit_direction='both')
+        obs_year = data_obs_year[sta].loc['2000':'2014'].interpolate(method='linear', limit_direction='both')
         ref_stddev = np.std(obs_data).values[0]
         model_stddevs = [np.std(modelo[sta].interpolate(method='linear', limit_direction='both')) for modelo in select_models_day]
         correlations = [np.corrcoef(modelo[sta].interpolate(method='linear', limit_direction='both'), obs_data[sta])[0, 1] for modelo in select_models_day]
@@ -415,7 +429,7 @@ def graphics_taylor_evaluation(data_obs, data_obs_year, input_hist_models_year, 
         plt.close()
 
 # Main logic that runs the evaluation, generates graphs, and saves the results
-BASE_PATH = r'TNC-N4WF\00_Example/' # path input project
+BASE_PATH = r'D:\Cambio_Climatico_Mendoza/' # path input project
 
 models = ['ACCESS-ESM1-5','CanESM5','CESM2','EC-Earth3','MIROC6','MPI-ESM1-2-LR','MRI-ESM2-0']
 escenarios = ['historical-obs','historical-gcm','ssp126', 'ssp245', 'ssp370', 'ssp585']
