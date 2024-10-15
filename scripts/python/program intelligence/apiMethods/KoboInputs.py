@@ -37,6 +37,14 @@ def fetch_kobo_data(url, token, api_version, form_uid):
 
     return kobo_form.data
 
+def delete_kobo_data(url, token): 
+    try:
+        headers = {'Authorization': f'Token {token}'}
+        response = requests.delete(url, headers=headers)
+        json_response = json.loads(response.text)
+    except:
+        print("Unable to delete kobo data. Please do so manually.")
+
 def fetch_kobo_media_files(url, token):
  #Get existing media associated with destination form
     try:
@@ -60,7 +68,7 @@ def fetch_kobo_media_content(url, token):
         print("Unable to fetch media")
     return media
 
-def delete_kobo_media_files(url, token, existing_file_id):
+def delete_kobo_media_file(url, token, existing_file_id):
     #Delete File
     try:
         headers = {'Authorization': f'Token {token}'}
@@ -68,7 +76,7 @@ def delete_kobo_media_files(url, token, existing_file_id):
     except:
         print("Unable to delete file")
 
-def upload_kobo_media_files(url, token, new_data, filename): 
+def upload_kobo_media_file(url, token, new_data, filename): 
     #binary encode new file contents
     temp_data = f'./{filename}.csv'
     new_data.to_csv(temp_data)
