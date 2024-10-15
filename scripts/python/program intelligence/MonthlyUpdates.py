@@ -105,7 +105,7 @@ def main():
         with open('./Implementation_Activity.xlsx', 'rb') as file:
             file_bytes = file.read()
             binary_data = io.BytesIO(file_bytes)
-            databricks.files.upload(DATABRICKS_IMPL_ACTIVITY_UNPROCESSED_FILE_PATH, binary_data, overwrite = True)
+            databricks.files.upload(f'{DATABRICKS_IMPL_ACTIVITY_UNPROCESSED_FILE_PATH}/Implementation_Activity.xlsx', binary_data, overwrite = True)
     except:
         print("unable to upload file to Databricks volume")
 
