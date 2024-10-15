@@ -97,6 +97,8 @@ def main():
     impl_activity_form_data.columns = impl_activity_form_data.columns.str.removeprefix("impl_activity_")
     impl_activity_start_date = datetime.datetime.strptime(impl_activity_form_data['startdate'],'%Y-%m-%d')
     impl_activity_form_data['ID'] = impl_activity_form_data['program'] + impl_activity_form_data['nbs'] + str(impl_activity_form_data['polygon']) + str(impl_activity_start_date.month) + str(impl_activity_start_date.year)
+    drop_columns = impl_activity_form_data.columns[impl_activity_form_data.columns.str.startswith('_')]
+    impl_activity_form_data.drop(drop_columns, axis=1, inplace=True)
     impl_activity_form_data.to_excel("Implementation_Activity.xlsx","Implementation Activity")
 
     #4. Upload Excel Output to Databricks Volume (unprocessed folder)
