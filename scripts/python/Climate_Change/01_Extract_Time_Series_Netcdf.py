@@ -215,9 +215,9 @@ def main(base_path, path_cat, catalog_file, path_out, variables, dict_var, dict_
 
 # Define paths and dictionaries - adjust these variables as needed for your project
 path = r'D:\CMIP6/'
-path_cat = r'/' #Path input
-catalog_file = '03_Catalogo.xlsx' #example catalogo for statios, important latitude and longitude
-path_out = r'/' #path output
+path_cat = r'C:\Users\miguel.canon\Box\00-N4W_Facility_Projects_(Technical)\SE18-Yaque_del_Norte\03-Working_Folder\SA\02_Climate_Caracterization\01_Completitud_Consistencia/' #Path input
+catalog_file = '03_Catalog_Check.xlsx' #example catalogo for statios, important latitude and longitude
+path_out = r'C:\Users\miguel.canon\Box\00-N4W_Facility_Projects_(Technical)\SE18-Yaque_del_Norte\03-Working_Folder\SA\02_Climate_Caracterization\04_Climate_Change/' #path output
 
 # Dictionary mapping user-friendly names to NetCDF variable keys
 dict_var = {'Tas': 'tas', 'PT': 'pr'}
