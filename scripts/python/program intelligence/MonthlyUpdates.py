@@ -1,14 +1,15 @@
 import datetime
 import pandas as pd
+import numpy as np
 from dotenv import load_dotenv, dotenv_values
-#from databricks.connect import DatabricksSession
 from databricks.sdk import WorkspaceClient
-import pykobo
 import json
-import requests
 import io
 import urllib.request
 from apiMethods.KoboInputs import fetch_kobo_data,fetch_kobo_media_files,fetch_kobo_media_content,delete_kobo_media_file,upload_kobo_media_file,redeploy_kobo_form
+#import pykobo
+#import requests
+#from databricks.connect import DatabricksSession
 
 config_data = []
 with open('config.json', 'r') as config_file:
@@ -73,6 +74,14 @@ def merge_polygon_choices(new_choice_data, existing_choice_data, token):
 
     return updated_polygons
 
+def merge_other_choices(new_data, choice_file, choice_file_fieldnames):
+    existing_data = fetch_kobo_media_content(choice_file['content'],KOBO_TOKEN)
+    updated_data = pd.concat([existing_data[choice_file_fieldnames], new_data], ignore_index=True)
+    updated_data.drop_duplicates(inplace=True)
+    updated_data.replace('', np.nan, inplace=True)
+    updated_data.dropna(inplace=True)
+    return updated_data
+
 def main():
     print("Monthly Run")
 
@@ -90,18 +99,49 @@ def main():
     delete_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/files',KOBO_TOKEN,existing_polygon_file_id)    
     #2c. Upload new polygons csv file to Kobo media library
     upload_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN,new_polygon_file_content,'programs_implementation_polygons')
-    #2d. Redeploy Implementation Activity form
+    
+    #3. Update Kobo csvs: "other" values
+    #3a. Funders
+    new_funders = impl_activity_form_data[['program','funder_other']] 
+    funders_filename = 'programs_funders'
+    funders_file = list(filter(lambda x: x['metadata']['filename'] == f'{funders_filename}.csv', impl_activity_form_existing_csvs))[0]
+    merged_funders_data = merge_other_choices(new_funders,funders_file,['program','name'])
+    delete_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/files',KOBO_TOKEN,funders_file['uid'])    
+    upload_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN,merged_funders_data,funders_filename)
+    #3b. Implementers
+    new_implementers = impl_activity_form_data[['program','implementer_other']] 
+    implementers_filename = 'programs_implementers'
+    implementers_file = list(filter(lambda x: x['metadata']['filename'] == f'{implementers_filename}.csv', impl_activity_form_existing_csvs))[0]
+    merged_implementers_data = merge_other_choices(new_implementers,implementers_file,['program','name'])
+    delete_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/files',KOBO_TOKEN,implementers_file['uid'])    
+    upload_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN,merged_implementers_data,implementers_filename)
+    #3c. Contractors
+    new_contractors = impl_activity_form_data[['program','contractor_other']] 
+    contractors_filename = 'programs_contractors'
+    contractors_file = list(filter(lambda x: x['metadata']['filename'] == f'{contractors_filename}.csv', impl_activity_form_existing_csvs))[0]
+    merged_contractors_data = merge_other_choices(new_contractors,contractors_file,['program','name'])
+    delete_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/files',KOBO_TOKEN,contractors_file['uid'])    
+    upload_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN,merged_contractors_data,contractors_filename)
+    #3d. Landowners
+    new_landowners = impl_activity_form_data[['program','landowner_other']] 
+    landowners_filename = 'programs_landowners'
+    landowners_file = list(filter(lambda x: x['metadata']['filename'] == f'{landowners_filename}.csv', impl_activity_form_existing_csvs))[0]
+    merged_landowners_data = merge_other_choices(new_landowners,landowners_file,['program','name'])
+    delete_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/files',KOBO_TOKEN,landowners_file['uid'])    
+    upload_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN,merged_landowners_data,landowners_filename)
+
+    #4. Redeploy Implementation Activity form
     redeploy_kobo_form(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN)
 
-    #3. Create Excel Output (Implementation_Activity.xlsx)
-    impl_activity_form_data.columns = impl_activity_form_data.columns.str.removeprefix("impl_activity_")
+    #5. Create Excel Output (Implementation_Activity.xlsx)
+    #impl_activity_form_data.columns = impl_activity_form_data.columns.str.removeprefix("impl_activity_")
     impl_activity_start_date = datetime.datetime.strptime(impl_activity_form_data['startdate'],'%Y-%m-%d')
     impl_activity_form_data['ID'] = impl_activity_form_data['program'] + impl_activity_form_data['nbs'] + str(impl_activity_form_data['polygon']) + str(impl_activity_start_date.month) + str(impl_activity_start_date.year)
     drop_columns = impl_activity_form_data.columns[impl_activity_form_data.columns.str.startswith('_')]
     impl_activity_form_data.drop(drop_columns, axis=1, inplace=True)
     impl_activity_form_data.to_excel("Implementation_Activity.xlsx","Implementation Activity")
 
-    #4. Upload Excel Output to Databricks Volume (unprocessed folder)
+    #6. Upload Excel Output to Databricks Volume (unprocessed folder)
     databricks = WorkspaceClient()
     try:
         with open('./Implementation_Activity.xlsx', 'rb') as file:
@@ -111,11 +151,9 @@ def main():
     except:
         print("unable to upload file to Databricks volume")
 
-    #5. Run Relevant Databricks Jobs to update table data
-    
-
-    #6. Merge new shapefiles into existing using "UnionShapefiles" methods
-    #7. Delete data in Kobo using "DeleteKoboData" methods
+    #7. Run Relevant Databricks Jobs to update table data (separate codebase)
+    #8. Merge new shapefiles into existing using "UnionShapefiles" methods (call manually)
+    #9. Delete data in Kobo using "DeleteKoboData" methods - in seperate file (call manually)
 
 if __name__ == '__main__':
     main()

@@ -4,10 +4,10 @@ import numpy as np
 from dotenv import load_dotenv, dotenv_values
 from databricks.sdk import WorkspaceClient
 from apiMethods.KoboInputs import fetch_kobo_media_files,fetch_kobo_media_content,delete_kobo_media_file,upload_kobo_media_file,redeploy_kobo_form
-import pykobo
-import requests
 import io
 import json
+#import pykobo
+#import requests
 
 #Load Environment Variables for Databricks
 load_dotenv()
@@ -48,14 +48,14 @@ def main():
                 open_file.close()
 
     overview_df = pd.read_excel(f'./{temp_file}',sheet_name='Program_Overview')
-    partners_df = pd.read_excel(f'./{temp_file}',sheet_name='Key_Partners')
+    partners_df = pd.read_excel(f'./{temp_file}',sheet_name='Key_Groups')
     funders_df = pd.read_excel(f'./{temp_file}',sheet_name='Key_Funding_Sources')
     nbs_df = pd.read_excel(f'./{temp_file}',sheet_name='NbS_Overview')
+    nbs_methods_df = pd.read_excel(f'./{temp_file}',sheet_name='NbS_Methods')
     #kpis_df = pd.read_excel(f'./{temp_file}',sheet_name='Program_KPIs')
 
     #Update: programs, programs_funders, programs_implementers, programs_contractors, programs_nbs
     #Ask Erik about: polygons, project managers vs partners, specific invasive species, nbs methods, 
-    #Also: use "funder" or "funding stream" for choice?
     #Also: age vs gender breakdown: when to gather preference? what to use as default?
     impl_activity_form_existing_csvs = fetch_kobo_media_files(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/files', KOBO_TOKEN)
     
@@ -67,6 +67,8 @@ def main():
     upload_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN,merged_programs_data,programs_filename)
 
     #Funders
+    #Add others option:
+    funders_df.loc[len(funders_df.index)] = ['other','other'] 
     funders_filename = 'programs_funders'
     funders_file = list(filter(lambda x: x['metadata']['filename'] == f'{funders_filename}.csv', impl_activity_form_existing_csvs))[0]
     merged_funders_data = merge_choices(funders_df[['ProgramName','FundingStream']],funders_file,['program','name'])
@@ -83,12 +85,12 @@ def main():
     delete_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/files',KOBO_TOKEN,nbs_file['uid'])    
     upload_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN,merged_nbs_data,nbs_filename)
 
-    ### FILTER FOR IMPLEMENTERS AND CONTRACTORS!!
-
     #Implementers
     implementers_filename = 'programs_implementers'
     implementers_file = list(filter(lambda x: x['metadata']['filename'] == f'{implementers_filename}.csv', impl_activity_form_existing_csvs))[0]
     implementers_df = partners_df[partners_df['Type'] == 'Implementer']
+    #Add others option:
+    implementers_df.loc[len(implementers_df.index)] = ['Implementer','other'] 
     merged_implementers_data = merge_choices(implementers_df['ProgramName','Name'],implementers_file,['program','name'])
     delete_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/files',KOBO_TOKEN,implementers_file['uid'])    
     upload_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN,merged_implementers_data,implementers_filename)
@@ -97,10 +99,24 @@ def main():
     contractors_filename = 'programs_contractors'
     contractors_file = list(filter(lambda x: x['metadata']['filename'] == f'{contractors_filename}.csv', impl_activity_form_existing_csvs))[0]
     contractors_df = partners_df[partners_df['Type'] == 'Contractor']
+    #Add others option:
+    contractors_df.loc[len(contractors_df.index)] = ['Contractor','other'] 
     merged_contractors_data = merge_choices(contractors_df['ProgramName','Name'],contractors_file,['program','name'])
     delete_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/files',KOBO_TOKEN,contractors_file['uid'])    
     upload_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN,merged_contractors_data,contractors_filename)
     
+    #Landowners
+    landowners_filename = 'programs_landowners'
+    landowners_file = list(filter(lambda x: x['metadata']['filename'] == f'{landowners_filename}.csv', impl_activity_form_existing_csvs))[0]
+    landowners_df = partners_df[partners_df['Type'] == 'Landowner']
+    #Add others option:
+    landowners_df.loc[len(contractors_df.index)] = ['Landowner','other'] 
+    merged_landowners_data = merge_choices(landowners_df['ProgramName','Name'],landowners_file,['program','name'])
+    delete_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/files',KOBO_TOKEN,landowners_file['uid'])    
+    upload_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN,merged_landowners_data,landowners_filename)
+
+    #NbS Methods - Confirm with Erik first
+
     pause = 'pause'
     redeploy_kobo_form(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN)
 
