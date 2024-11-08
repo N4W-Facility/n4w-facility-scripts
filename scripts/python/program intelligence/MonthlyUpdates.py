@@ -24,20 +24,20 @@ DATABRICKS_IMPL_ACTIVITY_UNPROCESSED_FILE_PATH = config_data['databricks_impleme
 
 def merge_polygon_choices(new_choice_data, existing_choice_data, token):
     # Create Dataframe to store new polygon records
-    new_polygons = pd.DataFrame(columns=['impl_activity_program','impl_activity_polygon','impl_activity_plan','impl_activity_full_polygon'],data=None)
+    new_polygons = pd.DataFrame(columns=['program','polygon','plan_exists','full_polygon'],data=None)
     # Loop through new data and create new polygon records 
     for index, row in new_choice_data.iterrows():
-        impl_activity_program = row['impl_activity_program']
-        impl_activity_polygon = row['impl_activity_polygon']
-        impl_activity_plan = row['impl_activity_plan']
-        impl_activity_full_polygon = row['impl_activity_full_polygon']
+        impl_activity_program = row['program']
+        impl_activity_polygon = row['polygon']
+        impl_activity_plan = row['plan_exists']
+        impl_activity_full_polygon = row['full_polygon']
 
         # If no existing implementation plan, assume new polygon?
-        #if(impl_activity_plan == 0):
+        #if(plan_exists == 0):
         #    new_polygons.loc[len(new_polygons.index)] = {
         #        'id': len(new_polygons.index),
-        #        'program': impl_activity_program,
-        #        'implementation_polygon': impl_activity_polygon,
+        #        'program': program,
+        #        'implementation_polygon': polygon,
         #        'implementation_plan': 0
         #    }
 
