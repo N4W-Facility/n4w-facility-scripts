@@ -116,7 +116,6 @@ def main():
     upload_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN,merged_landowners_data,landowners_filename)
 
     #NbS Methods - Confirm with Erik first
-
     pause = 'pause'
     redeploy_kobo_form(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}',KOBO_TOKEN)
 

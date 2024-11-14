@@ -37,6 +37,23 @@ def fetch_kobo_data(url, token, api_version, form_uid):
 
     return kobo_form.data
 
+def update_kobo_data(url,token,submission_ids, data):
+    headers = {'Authorization': f'Token {token}'}
+    params = {'format': 'json'}
+    payload = {
+        'submission_ids': submission_ids,
+        'data': data
+    }
+    try:
+        res = requests.patch(
+            url=url,
+            data={'payload': json.dumps(payload)},
+            params=params,
+            headers=headers
+        )
+    except:
+        print("Unable to update record(s).")
+
 def delete_kobo_data(url, token): 
     try:
         headers = {'Authorization': f'Token {token}'}

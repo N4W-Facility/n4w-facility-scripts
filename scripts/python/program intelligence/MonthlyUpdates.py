@@ -6,7 +6,7 @@ from databricks.sdk import WorkspaceClient
 import json
 import io
 import urllib.request
-from apiMethods.KoboInputs import fetch_kobo_data,fetch_kobo_media_files,fetch_kobo_media_content,delete_kobo_media_file,upload_kobo_media_file,redeploy_kobo_form
+from apiMethods.KoboInputs import fetch_kobo_data,fetch_kobo_media_files,fetch_kobo_media_content,delete_kobo_media_file,upload_kobo_media_file,redeploy_kobo_form,update_kobo_data
 #import pykobo
 #import requests
 #from databricks.connect import DatabricksSession
@@ -22,7 +22,7 @@ USERNAME = config_data['kobo_username']
 IMPLEMENTATION_ACTIVITY_FORM_UID = config_data['kobo_implementation_activity_form_uid']
 DATABRICKS_IMPL_ACTIVITY_UNPROCESSED_FILE_PATH = config_data['databricks_implementation_activity_unprocessed_path']
 
-def merge_polygon_choices(new_choice_data, existing_choice_data, token):
+def merge_polygon_choices(new_choice_data, existing_choice_data, token, update_url):
     # Create Dataframe to store new polygon records
     new_polygons = pd.DataFrame(columns=['program','polygon','plan_exists','full_polygon'],data=None)
     # Loop through new data and create new polygon records 
@@ -32,17 +32,8 @@ def merge_polygon_choices(new_choice_data, existing_choice_data, token):
         impl_activity_plan = row['plan_exists']
         impl_activity_full_polygon = row['full_polygon']
 
-        # If no existing implementation plan, assume new polygon?
-        #if(plan_exists == 0):
-        #    new_polygons.loc[len(new_polygons.index)] = {
-        #        'id': len(new_polygons.index),
-        #        'program': program,
-        #        'implementation_polygon': polygon,
-        #        'implementation_plan': 0
-        #    }
-
         # If marked as not full polygon, create new subdivision (increase letter)
-        if(impl_activity_plan == 1 and impl_activity_full_polygon == 'no'):
+        if(impl_activity_full_polygon == 'no'):
             # Check both in preexisting and polygons, and new polygons created during this program run
             existing_polygon_subdivisions = existing_choice_data[['implementation_polygon'].startswith(impl_activity_polygon)]['implementation_polygon'] \
                 + new_polygons.startswith(impl_activity_polygon)['implementation_polygon']
@@ -58,10 +49,21 @@ def merge_polygon_choices(new_choice_data, existing_choice_data, token):
                 'implementation_polygon': new_max_subdivision,
                 'implementation_plan': impl_activity_plan
             }
+            
+            # Update Kobo Record to have link to new subpolygon code
+            try:
+                submission_ids = [row['_id']]
+                data = {
+                    'new_subpolygon':new_max_subdivision
+                }
+                update_kobo_data(update_url,token,submission_ids,data)
+            except:
+                print("Unable to update record.")
+
             # Also download provided shapefile
             try:
                 headers = {'Authorization': f'Token {token}'}
-                url = row['impl_activity_new_subpolygon_file_URL']
+                url = [filter(lambda p: p.question_xpath == "new_subpolygon_file", row['attachments'])][0]['download_url']
                 request = urllib.Request(url)
                 request.add_header(headers)   
                 urllib.request.urlretrieve(url, f'./UnprocessedShapefiles/{new_max_subdivision}')
@@ -94,7 +96,7 @@ def main():
     #2. Update Kobo csv: polygon choices for implementation activity
     #2a. Fetch existing Kobo csv files content
     existing_polygons = fetch_kobo_media_content(existing_polygon_file['content'],KOBO_TOKEN)
-    new_polygon_file_content = merge_polygon_choices(impl_activity_form_data,existing_polygons, KOBO_TOKEN)
+    new_polygon_file_content = merge_polygon_choices(impl_activity_form_data,existing_polygons, KOBO_TOKEN, f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/data/bulk')
     #2b. Delete old polygons csv file from Kobo media library
     delete_kobo_media_file(f'{URL_KOBO}api/v2/assets/{IMPLEMENTATION_ACTIVITY_FORM_UID}/files',KOBO_TOKEN,existing_polygon_file_id)    
     #2c. Upload new polygons csv file to Kobo media library
