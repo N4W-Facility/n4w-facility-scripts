@@ -5,14 +5,18 @@ from dotenv import load_dotenv, dotenv_values
 from databricks.sdk import WorkspaceClient
 import json
 import io
+import os
 import urllib.request
 from apiMethods.KoboInputs import fetch_kobo_data,fetch_kobo_media_files,fetch_kobo_media_content,delete_kobo_media_file,upload_kobo_media_file,redeploy_kobo_form,update_kobo_data
 #import pykobo
 #import requests
 #from databricks.connect import DatabricksSession
 
+__location__ = os.path.realpath(
+    os.path.join(os.getcwd(), os.path.dirname(__file__)))
+
 config_data = []
-with open('config.json', 'r') as config_file:
+with open(os.path.join(__location__, 'config.json'), 'r') as config_file:
     config_data = json.load(config_file)
 
 URL_KOBO = config_data['kobo_api_url']

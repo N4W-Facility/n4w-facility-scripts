@@ -178,28 +178,11 @@ def parse_overview_to_implementation_choices(new_choice_data, existing_choice_da
     pause = 'pause'
 
 def main():
-    #relevant forms
-    wip_overview_form_uid = 'aykuxSFN2XYpF4Bh4khN5g'
-    implementation_plan_form_uid = 'aVF9A9E2PXvqVpoCBEPMku'
 
     #Test values
-    test_delete_file_uid = 'afQCd3utpqwCwz6dZ6mtMhC'
     test_file = 'C:\\Users\\erin.wilcox\\Downloads\\currencies.csv'
-
-    new_data = pd.read_csv(test_file, encoding = 'Windows-1252')
+    #new_data = pd.read_csv(test_file, encoding = 'Windows-1252')
     #End Test Values
-    
-#    input_form_data = fetch_kobo_data(URL_KOBO,KOBO_TOKEN,API_VERSION,wip_overview_form_uid)
-#    output_form_media_files = fetch_kobo_media_files(f'{URL_KOBO}api/v2/assets/{implementation_plan_form_uid}/files', KOBO_TOKEN)
-
-#    for file in output_form_media_files:
-#        if 'wips_' in file['metadata']['filename']:
-#            existing_choices = fetch_kobo_media_content(file['content'],KOBO_TOKEN)
-#            #determine how to know which choices to parse
-#            parse_overview_to_implementation_choices(input_form_data, existing_choices) #- return dataframe
-#    delete_kobo_media_files(f'{URL_KOBO}api/v2/assets/{implementation_plan_form_uid}/files', KOBO_TOKEN,test_delete_file_uid)
-#    upload_kobo_media_files(f'{URL_KOBO}api/v2/assets/{implementation_plan_form_uid}',KOBO_TOKEN,new_data,'currencies')
-#    redeploy_kobo_form(f'{URL_KOBO}api/v2/assets/{implementation_plan_form_uid}',KOBO_TOKEN)
 
 if __name__ == '__main__':
     main()
