@@ -4,10 +4,10 @@ import numpy as np
 from dotenv import load_dotenv, dotenv_values
 from databricks.sdk import WorkspaceClient
 import json
-import io
 import os
 import urllib.request
 from apiMethods.KoboInputs import fetch_kobo_data,fetch_kobo_media_files,fetch_kobo_media_content,delete_kobo_media_file,upload_kobo_media_file,redeploy_kobo_form,update_kobo_data
+#import io
 #import pykobo
 #import requests
 #from databricks.connect import DatabricksSession
@@ -28,13 +28,36 @@ DATABRICKS_IMPL_ACTIVITY_UNPROCESSED_FILE_PATH = config_data['databricks_impleme
 
 def merge_polygon_choices(new_choice_data, existing_choice_data, token, update_url):
     # Create Dataframe to store new polygon records
-    new_polygons = pd.DataFrame(columns=['program','polygon','plan_exists','full_polygon'],data=None)
+    new_polygons = pd.DataFrame(columns=['program','polygon','plan_exists','full_polygon','catchment','subcatchment'],data=None)
     # Loop through new data and create new polygon records 
     for index, row in new_choice_data.iterrows():
         impl_activity_program = row['program']
         impl_activity_polygon = row['polygon']
         impl_activity_plan = row['plan_exists']
         impl_activity_full_polygon = row['full_polygon']
+        impl_activity_catchment = row['catchment']
+        impl_activity_subcatchment = row['subcatchment']
+
+        # If marked as not full polygon, create new subdivision (increase letter)
+        if(impl_activity_polygon == 'other'):
+            # generate new polygon code here. 
+            existing_polygons = existing_choice_data['implementation_polygon']
+            existing_polygons['length'] = existing_choice_data['implementation_polygon'].str.len()
+            minLength = existing_polygons['length'].min()
+            recordToImplement = existing_polygons[existing_polygons['length']==minLength].sort_values(by=['polygon'],ascending=False)
+            newPolygon1 = recordToImplement[:-1]
+            newPolygon2 = recordToImplement[-1]
+            newPolygon2 = chr(ord(newPolygon2) + 1)
+            newPolygon = newPolygon1 + newPolygon2
+
+            new_polygons.loc[len(new_polygons.index)] = {
+                'id': len(new_polygons.index),
+                'program': impl_activity_program,
+                'implementation_polygon': newPolygon,
+                'implementation_plan': impl_activity_plan,
+                'catchment':impl_activity_catchment,
+                'subcatchment': impl_activity_subcatchment
+            }
 
         # If marked as not full polygon, create new subdivision (increase letter)
         if(impl_activity_full_polygon == 'no'):
@@ -51,7 +74,9 @@ def merge_polygon_choices(new_choice_data, existing_choice_data, token, update_u
                 'id': len(new_polygons.index),
                 'program': impl_activity_program,
                 'implementation_polygon': new_max_subdivision,
-                'implementation_plan': impl_activity_plan
+                'implementation_plan': impl_activity_plan,
+                'catchment':impl_activity_catchment,
+                'subcatchment': impl_activity_subcatchment
             }
             
             # Update Kobo Record to have link to new subpolygon code
@@ -141,23 +166,23 @@ def main():
 
     #5. Create Excel Output (Implementation_Activity.xlsx)
     #impl_activity_form_data.columns = impl_activity_form_data.columns.str.removeprefix("impl_activity_")
-    impl_activity_start_date = datetime.datetime.strptime(impl_activity_form_data['startdate'],'%Y-%m-%d')
-    impl_activity_form_data['ID'] = impl_activity_form_data['program'] + impl_activity_form_data['nbs'] + str(impl_activity_form_data['polygon']) + str(impl_activity_start_date.month) + str(impl_activity_start_date.year)
-    drop_columns = impl_activity_form_data.columns[impl_activity_form_data.columns.str.startswith('_')]
-    impl_activity_form_data.drop(drop_columns, axis=1, inplace=True)
-    impl_activity_form_data.to_excel("Implementation_Activity.xlsx","Implementation Activity")
+    #impl_activity_start_date = datetime.datetime.strptime(impl_activity_form_data['startdate'],'%Y-%m-%d')
+    #impl_activity_form_data['ID'] = impl_activity_form_data['program'] + impl_activity_form_data['nbs'] + str(impl_activity_form_data['polygon']) + str(impl_activity_start_date.month) + str(impl_activity_start_date.year)
+    #drop_columns = impl_activity_form_data.columns[impl_activity_form_data.columns.str.startswith('_')]
+    #impl_activity_form_data.drop(drop_columns, axis=1, inplace=True)
+    #impl_activity_form_data.to_excel("Implementation_Activity.xlsx","Implementation Activity")
 
     #6. Upload Excel Output to Databricks Volume (unprocessed folder)
-    databricks = WorkspaceClient()
-    try:
-        with open('./Implementation_Activity.xlsx', 'rb') as file:
-            file_bytes = file.read()
-            binary_data = io.BytesIO(file_bytes)
-            databricks.files.upload(f'{DATABRICKS_IMPL_ACTIVITY_UNPROCESSED_FILE_PATH}/Implementation_Activity.xlsx', binary_data, overwrite = True)
-    except:
-        print("unable to upload file to Databricks volume")
-
+    #databricks = WorkspaceClient()
+    #try:
+    #    with open('./Implementation_Activity.xlsx', 'rb') as file:
+    #        file_bytes = file.read()
+    #        binary_data = io.BytesIO(file_bytes)
+    #        databricks.files.upload(f'{DATABRICKS_IMPL_ACTIVITY_UNPROCESSED_FILE_PATH}/Implementation_Activity.xlsx', binary_data, overwrite = True)
+    #except:
+    #    print("unable to upload file to Databricks volume")
     #7. Run Relevant Databricks Jobs to update table data (separate codebase)
+
     #8. Merge new shapefiles into existing using "UnionShapefiles" methods (call manually)
     #9. Delete data in Kobo using "DeleteKoboData" methods - in seperate file (call manually)
 

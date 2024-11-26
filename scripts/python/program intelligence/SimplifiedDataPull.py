@@ -2,6 +2,7 @@ import json
 import pykobo
 import requests
 import os
+import pandas as pd
 
 __location__ = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__)))
