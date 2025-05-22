@@ -37,29 +37,6 @@ import sys, os
 stderr_original = sys.stderr
 sys.stderr = open(os.devnull, 'w')
 
-
-
-
-
-# Configurar GDAL_DATA y PROJ_LIB para el ejecutable
-#if getattr(sys, 'frozen', False):
-#    # Si es un ejecutable, usa la ruta empaquetada
-#    base_dir = sys._MEIPASS
-#    gdal_data = os.path.join(base_dir, "gdal_data")
-#    proj_data = os.path.join(base_dir, "proj_data")
-#else:
-#    # Si no, usa la ruta normal del entorno
-#    base_dir = os.path.dirname(os.path.abspath(__file__))
-#    gdal_data = os.path.join(os.environ['CONDA_PREFIX'], "lib", "site-packages", "rasterio", "gdal_data")
-#    proj_data = os.path.join(os.environ['CONDA_PREFIX'], "lib", "site-packages", "rasterio", "proj_data")
-
-# Definir variables de entorno críticas
-#os.environ['GDAL_DATA'] = gdal_data
-#os.environ['PROJ_LIB'] = proj_data
-# Crear la cola global para mensajes
-# Crear la cola global para mensajes
-
-
 # Configurar GDAL_DATA y PROJ_LIB
 if getattr(sys, 'frozen', False):
     base_dir = sys._MEIPASS
@@ -213,239 +190,261 @@ def calcular_area_y_subpoligonos(polygon_path):
     except Exception as e:
         print(f"Error processing shapefile: {e}")
         return None
-def generar_imagen_png(shapefile_path, output_png_path,nombre_proyecto):
+def generar_imagen_png1(shapefile_path, output_png_path, nombre_proyecto, buffer_km=0.8):
     """
-    Genera una imagen PNG de un polígono shapefile con bordes rojos y un mapa base.
+    Genera una imagen PNG de un polígono shapefile con bordes negros y un mapa base.
+    Usa lógica de buffer como en la función generar_imagen_con_capas.
 
     Parámetros:
     - shapefile_path: Ruta del archivo shapefile de entrada.
     - output_png_path: Ruta donde se guardará la imagen PNG generada.
+    - nombre_proyecto: Texto para mostrar en la leyenda.
+    - buffer_km: Margen en kilómetros alrededor del polígono.
     """
+    import matplotlib.pyplot as plt
     import matplotlib.patches as mpatches
     from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+    import geopandas as gpd
+    import contextily as ctx
+    from shapely.geometry import box
+    import numpy as np
+
     try:
         # Leer el shapefile
         gdf = gpd.read_file(shapefile_path)
-        # if gdf.crs.to_string() != 'EPSG:27700':
-        #     gdf = gdf.to_crs('EPSG:27700')
         if gdf.crs.to_string() != 'EPSG:3857':
             gdf = gdf.to_crs('EPSG:3857')
 
-        # Crear la figura y los ejes
+        # Crear la figura
         fig, ax = plt.subplots(figsize=(10, 10))
 
-        # Añadir el polígono al gráfico
-        gdf.plot(ax=ax, edgecolor='black', facecolor='none', linewidth=2,)
+        # Dibujar el polígono
+        gdf.plot(ax=ax, edgecolor='black', facecolor='none', linewidth=2)
 
+        # Añadir mapa base
         try:
             ctx.add_basemap(ax, crs=gdf.crs.to_string(), source="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png")
         except:
             ctx.add_basemap(ax, crs=gdf.crs.to_string(), source=ctx.providers.OpenStreetMap.Mapnik)
 
-
-
-        # Ajustar los límites al polígono de referencia con margen
+        # Ajustar límites con buffer (como en generar_imagen_con_capas)
         xmin, ymin, xmax, ymax = gdf.total_bounds
-        margen_x = (xmax - xmin) * 0.2
-        margen_y = (ymax - ymin) * 0.2
-        ax.set_xlim(xmin - margen_x, xmax + margen_x)
-        ax.set_ylim(ymin - margen_y, ymax + margen_y)
+        buffer_m = buffer_km * 1000
+        ax.set_xlim(xmin - buffer_m, xmax + buffer_m)
+        ax.set_ylim(ymin - buffer_m, ymax + buffer_m)
 
-
-        north_arrow_path = obtener_ruta_data("Simbolo.png") #'Data/Simbolo.png' 
-        # Agregar el símbolo del norte como imagen
+        # Agregar símbolo norte
         try:
+            north_arrow_path = obtener_ruta_data("Simbolo.png")
             north_arrow_img = plt.imread(north_arrow_path)
             imagebox = OffsetImage(north_arrow_img, zoom=0.1)
-            ab = AnnotationBbox(imagebox, (xmin + margen_x * 0.2, ymax - margen_y * 0.2), frameon=False,
-                                box_alignment=(1.1, 0.2))
+            north_x = xmin - buffer_m + (buffer_m * 0.1)
+            north_y = ymax + buffer_m - (buffer_m * 0.1)
+            ab = AnnotationBbox(imagebox, (north_x, north_y), frameon=False, box_alignment=(0, 1))
             ax.add_artist(ab)
         except Exception as e:
             print(f"Error adding the north symbol: {e}")
 
-        # Agregar la leyenda personalizada
+        # Leyenda personalizada
         leyenda = mpatches.Patch(color='black', label=nombre_proyecto)
         ax.legend(handles=[leyenda], loc='lower right', title="Legend")
-        ax.tick_params(axis='x', which='major', labelsize=10, labelcolor='gray', rotation=0)
-        ax.tick_params(axis='y', which='major', labelsize=10, labelcolor='gray', rotation=0)
-
+        ax.tick_params(axis='x', which='major', labelsize=10, labelcolor='gray')
+        ax.tick_params(axis='y', which='major', labelsize=10, labelcolor='gray')
         ax.grid()
 
         plt.savefig(output_png_path, dpi=300, bbox_inches='tight')
         plt.close()
 
-        # print(f"Imagen PNG generada exitosamente en: {output_png_path}")
     except Exception as e:
         print(f"Ocurrió un error: {e}")
-def generar_imagen_con_capas(shapefile_path, shapefile_paths, output_png_path, colores, transparencias, buffer_km=0.8):
+def generar_imagen_png(shapefile_path, output_png_path, nombre_proyecto, buffer_km=0.8):
     """
-    Genera una imagen PNG de múltiples capas shapefile con diferentes colores, transparencias, un mapa base y una leyenda.
-    Las áreas fuera del polígono de referencia se opacan. Se aplica un buffer cuadrado para limitar el área de visualización.
+    Genera una imagen PNG de un polígono shapefile con bordes negros y un mapa base,
+    asegurando que el mapa base se extienda con el buffer como en las otras funciones.
+    """
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
+    from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+    import geopandas as gpd
+    import contextily as ctx
+    from shapely.geometry import box
+    import numpy as np
 
-    Parámetros:
-    - shapefile_path: Ruta del shapefile de referencia.
-    - shapefile_paths: Lista de rutas de los archivos shapefile de entrada.
-    - output_png_path: Ruta donde se guardará la imagen PNG generada.
-    - colores: Lista de colores para cada capa.
-    - transparencias: Lista de valores de transparencia (entre 0 y 1) para cada capa.
-    - buffer_km: Tamaño del buffer en kilómetros (por defecto 5 km).
-    """
     try:
-        # Leer el shapefile de referencia
-        gdfref = gpd.read_file(shapefile_path)
+        # Leer y preparar el shapefile
+        gdf = gpd.read_file(shapefile_path)
+        if gdf.crs.to_string() != 'EPSG:3857':
+            gdf = gdf.to_crs('EPSG:3857')
 
-        # Limpiar geometrías inválidas en el shapefile de referencia
+        # Calcular el buffer
+        xmin, ymin, xmax, ymax = gdf.total_bounds
+        buffer_m = buffer_km * 1000
+
+        # Crear figura y ajustar límites ANTES del mapa base
+        fig, ax = plt.subplots(figsize=(10, 10))
+        ax.set_xlim(xmin - buffer_m, xmax + buffer_m)
+        ax.set_ylim(ymin - buffer_m, ymax + buffer_m)
+
+        # Añadir mapa base PRIMERO (para que cubra el área extendida)
+        try:
+            ctx.add_basemap(ax, crs=gdf.crs.to_string(), source=ctx.providers.OpenStreetMap.Mapnik)
+        except:
+            ctx.add_basemap(ax, crs=gdf.crs.to_string(), source=ctx.providers.Stamen.Terrain)
+
+        # Dibujar el polígono SOBRE el mapa base
+        gdf.plot(ax=ax, edgecolor='black', facecolor='none', linewidth=2)
+
+        # Símbolo del norte (coordenadas ajustadas al buffer)
+        try:
+            north_arrow_path = obtener_ruta_data("Simbolo.png")
+            north_arrow_img = plt.imread(north_arrow_path)
+            imagebox = OffsetImage(north_arrow_img, zoom=0.1)
+            north_x = xmin - buffer_m + (buffer_m * 0.1)
+            north_y = ymax + buffer_m - (buffer_m * 0.1)
+            ab = AnnotationBbox(imagebox, (north_x, north_y), frameon=False, box_alignment=(0, 1))
+            ax.add_artist(ab)
+        except Exception as e:
+            print(f"Error añadiendo símbolo del norte: {e}")
+
+        # Leyenda y ajustes finales
+        leyenda = mpatches.Patch(color='black', label=nombre_proyecto)
+        ax.legend(handles=[leyenda], loc='lower right', title="Legend")
+        ax.tick_params(axis='both', which='major', labelsize=10, labelcolor='gray')
+        ax.grid(True, linestyle='--', alpha=0.5)
+
+        plt.savefig(output_png_path, dpi=300, bbox_inches='tight')
+        plt.close()
+
+    except Exception as e:
+        print(f"Error: {e}")
+
+def generar_imagen_con_capas(shapefile_path, shapefile_paths, output_png_path, colores, transparencias, buffer_km=0.8):
+
+    try:
+        gdfref = gpd.read_file(shapefile_path)
+        if "Name" in gdfref.columns:
+            gdfref = gdfref.rename(columns={"Name": "nn"})
         gdfref['geometry'] = gdfref['geometry'].apply(lambda geom: make_valid(geom) if not geom.is_valid else geom)
 
-        # Asegurar que el CRS esté en EPSG:3857 (Web Mercator)
         if gdfref.crs.to_string() != 'EPSG:3857':
             gdfref = gdfref.to_crs('EPSG:3857')
 
         if len(shapefile_paths) != len(colores) or len(shapefile_paths) != len(transparencias):
             raise ValueError("El número de capas debe coincidir con el número de colores y transparencias.")
 
-        # Crear un buffer cuadrado alrededor del polígono de referencia
         xmin, ymin, xmax, ymax = gdfref.total_bounds
-        buffer_m = buffer_km * 1000  # Convertir kilómetros a metros
+        buffer_m = buffer_km * 1000
         buffer_box = box(xmin - buffer_m, ymin - buffer_m, xmax + buffer_m, ymax + buffer_m)
         gdf_buffer = gpd.GeoDataFrame(geometry=[buffer_box], crs=gdfref.crs)
 
-        # Crear la figura y los ejes
         fig, ax = plt.subplots(figsize=(15, 10))
-
         leyenda = []
 
-        # Graficar todas las capas completas dentro del buffer (incluyendo áreas fuera del polígono de referencia)
         for idx, files in enumerate(shapefile_paths):
-            # Leer cada shapefile
             gdf = gpd.read_file(files)
-
-            # Convertir al CRS de referencia si no está ya
             if gdf.crs.to_string() != gdfref.crs.to_string():
                 gdf = gdf.to_crs(gdfref.crs)
 
-            # Recortar la capa al buffer cuadrado
             gdf_clipped = gpd.clip(gdf, gdf_buffer)
 
-            # Graficar la capa recortada con transparencia reducida
             gdf_clipped.plot(
                 ax=ax,
                 edgecolor=colores[idx],
                 facecolor=colores[idx],
-                alpha=transparencias[idx] * 0.3,  # Opacidad reducida para áreas fuera del polígono
+                alpha=transparencias[idx] * 0.3,
                 linewidth=1
             )
 
-        # Graficar el polígono de referencia con un relleno semitransparente para opacar el exterior
         gdfref.plot(ax=ax, edgecolor='black', facecolor='none', linewidth=2)
 
-        # Crear una máscara para opacar el exterior del polígono de referencia
         from matplotlib.patches import Polygon
         import numpy as np
-
-        # Crear un polígono que cubra toda el área del buffer
         exterior_polygon = np.array([
             [xmin - buffer_m, ymin - buffer_m],
             [xmax + buffer_m, ymin - buffer_m],
             [xmax + buffer_m, ymax + buffer_m],
             [xmin - buffer_m, ymax + buffer_m]
         ])
-
-        # Crear un parche semitransparente para el exterior
         exterior_patch = Polygon(exterior_polygon, closed=True, facecolor='white', alpha=0.5, edgecolor='none')
         ax.add_patch(exterior_patch)
 
-        # Graficar las capas dentro del polígono de referencia con colores y transparencias completas
         combined_layer = None
         for idx, files in enumerate(shapefile_paths):
-            # Leer cada shapefile
             gdf = gpd.read_file(files)
-
-            # Convertir al CRS de referencia si no está ya
             if gdf.crs.to_string() != gdfref.crs.to_string():
                 gdf = gdf.to_crs(gdfref.crs)
 
-            # Recortar la capa al buffer cuadrado
             gdf_clipped = gpd.clip(gdf, gdf_buffer)
-
-            # Realizar la intersección con el polígono de referencia
             intersected = gpd.overlay(gdf_clipped, gdfref, how='intersection')
 
-            # Si ya hay una capa combinada, realizar la diferencia para evitar superposiciones
-            if combined_layer is not None:
-                intersected = gpd.overlay(intersected, combined_layer, how='difference')
+            if not intersected.empty:
+                if combined_layer is not None and not combined_layer.empty:
+                    intersected = gpd.overlay(intersected, combined_layer, how='difference')
 
-            # Actualizar la capa combinada
-            if combined_layer is None:
-                combined_layer = intersected.copy()
+                if not intersected.empty:
+                    if combined_layer is None or combined_layer.empty:
+                        combined_layer = intersected.copy()
+                    else:
+                        combined_layer = pd.concat([combined_layer, intersected], ignore_index=True)
+
+                    intersected.plot(
+                        ax=ax,
+                        edgecolor=colores[idx],
+                        facecolor=colores[idx],
+                        alpha=transparencias[idx],
+                        linewidth=1
+                    )
+
+                    if 'Name' in intersected.columns:
+                        leyenda.append(mpatches.Patch(color=colores[idx], label=intersected['Name'].iloc[0]))
+                    else:
+                        leyenda.append(mpatches.Patch(color=colores[idx], label=f"Layer {idx + 1}", alpha=transparencias[idx]))
+                else:
+                    leyenda.append(mpatches.Patch(color=colores[idx], label=f"Layer {idx + 1} (no NbS)", alpha=transparencias[idx]))
             else:
-                combined_layer = pd.concat([combined_layer, intersected], ignore_index=True)
+                leyenda.append(mpatches.Patch(color=colores[idx], label=f"Layer {idx + 1} (no NbS)", alpha=transparencias[idx]))
 
-            # Graficar la capa intersectada con el color y la transparencia específicos
-            intersected.plot(
-                ax=ax,
-                edgecolor=colores[idx],
-                facecolor=colores[idx],
-                alpha=transparencias[idx],  # Transparencia completa para áreas dentro del polígono
-                linewidth=1
-            )
-
-            # Agregar a la leyenda
-            # try:
-            if 'Name' in intersected.columns and not intersected.empty:
-                leyenda.append(mpatches.Patch(color=colores[idx], label=intersected['Name'].iloc[0]))
-            # except:
-            #     if 'Name' in intersected.columns:
-            #         leyenda.append(mpatches.Patch(color=colores[idx], label=''))
-
-        # Añadir un mapa base
         try:
             ctx.add_basemap(ax, crs=gdf.crs.to_string(), source="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png")
         except:
             ctx.add_basemap(ax, crs=gdf.crs.to_string(), source=ctx.providers.OpenStreetMap.Mapnik)
 
-        # Ajustar los límites al buffer cuadrado
         ax.set_xlim(xmin - buffer_m, xmax + buffer_m)
         ax.set_ylim(ymin - buffer_m, ymax + buffer_m)
-
-        # Eliminar los ejes para una visualización más limpia
         ax.tick_params(axis='x', which='major', labelsize=10, labelcolor='gray', rotation=0)
         ax.tick_params(axis='y', which='major', labelsize=10, labelcolor='gray', rotation=0)
         ax.grid()
 
-        # Agregar el símbolo del norte como imagen (ajustado a la esquina superior izquierda)
-        north_arrow_path = obtener_ruta_data("Simbolo.png")#'Data/Simbolo.png'
+        north_arrow_path = obtener_ruta_data("Simbolo.png")
         try:
             north_arrow_img = plt.imread(north_arrow_path)
             imagebox = OffsetImage(north_arrow_img, zoom=0.1)
-
-            # Posición del símbolo del norte (esquina superior izquierda)
-            north_x = xmin - buffer_m + (buffer_m * 0.1)  # 10% del buffer desde el borde izquierdo
-            north_y = ymax + buffer_m - (buffer_m * 0.1)  # 10% del buffer desde el borde superior
-
+            north_x = xmin - buffer_m + (buffer_m * 0.1)
+            north_y = ymax + buffer_m - (buffer_m * 0.1)
             ab = AnnotationBbox(imagebox, (north_x, north_y), frameon=False, box_alignment=(0, 1))
             ax.add_artist(ab)
         except Exception as e:
             print(f"Error adding the north symbol: {e}")
 
-        # Agregar la leyenda con el título "Legend"
         ax.legend(handles=leyenda, loc='lower right', title="Legend")
-
-        # Guardar la imagen como PNG
         plt.savefig(output_png_path, dpi=300, bbox_inches='tight')
         plt.close()
 
-        # print(f"Imagen PNG generada exitosamente en: {output_png_path}")
-
     except Exception as e:
         print(f"Error: {e}")
-def generar_imagen_con_capas_transparecia(shapefile_path, shapefile_paths, output_png_path, colores, transparencias, buffer_km=0.8):
+
+
+def generar_imagen_con_capas_transparecia_funciona(shapefile_path, shapefile_paths, output_png_path, colores, transparencias, buffer_km=0.8):
     try:
         # Leer el shapefile de referencia
         gdfref = gpd.read_file(shapefile_path)
 
+        if "Name" in gdfref.columns:
+            gdfref = gdfref.rename(columns={"Name": "nn"})
+
         # Limpiar geometrías inválidas en el shapefile de referencia
         gdfref['geometry'] = gdfref['geometry'].apply(lambda geom: make_valid(geom) if not geom.is_valid else geom)
+
 
         # Asegurar que el CRS esté en EPSG:3857 (Web Mercator)
         if gdfref.crs.to_string() != 'EPSG:3857':
@@ -472,6 +471,7 @@ def generar_imagen_con_capas_transparecia(shapefile_path, shapefile_paths, outpu
 
             # Limpiar geometrías inválidas en la capa actual
             gdf['geometry'] = gdf['geometry'].apply(lambda geom: make_valid(geom) if not geom.is_valid else geom)
+
 
             # Convertir al CRS de referencia si no está ya
             if gdf.crs.to_string() != gdfref.crs.to_string():
@@ -543,18 +543,50 @@ def generar_imagen_con_capas_transparecia(shapefile_path, shapefile_paths, outpu
 
             # Realizar la intersección con el polígono de referencia
             intersected = gpd.overlay(gdf_clipped, gdfref, how='intersection')
+            # intersected['geometry'] = intersected['geometry'].apply(lambda g: g.buffer(0) if g.is_valid else make_valid(g)) #adicion
 
             # Verificar si la intersección está vacía
             if intersected.empty:
                 # print(f"Advertencia: No hay intersección para la capa {files}. Se agregará a la leyenda.")
                 # Agregar a la leyenda incluso si no hay intersección
                 if 'Name' in gdf.columns:
-                    leyenda.append(
-                        mpatches.Patch(color=colores[idx], label=gdf['Name'].iloc[0], alpha=transparencias[idx]))
+                    if idx == 1:  # Aplicar estilo solo al segundo color (índice 1)
+                        leyenda.append(
+                            mpatches.Patch(
+                                edgecolor=colores[idx],  # Color del borde
+                                facecolor='none',  # Sin relleno
+                                linewidth=2,  # Grosor del borde
+                                label=gdf['Name'].iloc[0],
+                                alpha=transparencias[idx]
+                            )
+                        )
+                    else:
+                        leyenda.append(
+                            mpatches.Patch(
+                                color=colores[idx],  # Color normal (relleno y borde)
+                                label=gdf['Name'].iloc[0],
+                                alpha=transparencias[idx]
+                            )
+                        )
                 else:
-                    leyenda.append(mpatches.Patch(color=colores[idx], label=f"Layer {idx + 1} (no NbS)",
-                                                  alpha=transparencias[idx]))
-                continue
+                    if idx == 1:
+                        leyenda.append(
+                            mpatches.Patch(
+                                edgecolor=colores[idx],
+                                facecolor='none',
+                                linewidth=2,
+                                label=f"Layer {idx + 1} (no NbS)",
+                                alpha=transparencias[idx]
+                            )
+                        )
+                    else:
+                        leyenda.append(
+                            mpatches.Patch(
+                                color=colores[idx],
+                                label=f"Layer {idx + 1} (no NbS)",
+                                alpha=transparencias[idx]
+                            )
+                        )
 
             # Si ya hay una capa combinada, realizar la diferencia para evitar superposiciones
             if combined_layer is not None:
@@ -595,10 +627,30 @@ def generar_imagen_con_capas_transparecia(shapefile_path, shapefile_paths, outpu
                     linewidth=0  # Sin líneas de borde
                 )
 
-            # Agregar a la leyenda usando el campo 'Name'
+            # # Agregar a la leyenda usando el campo 'Name'
+            # if 'Name' in intersected.columns:
+            #     leyenda.append(
+            #         mpatches.Patch(color=colores[idx], label=intersected['Name'].iloc[0], alpha=transparencias[idx]))
+
             if 'Name' in intersected.columns:
-                leyenda.append(
-                    mpatches.Patch(color=colores[idx], label=intersected['Name'].iloc[0], alpha=transparencias[idx]))
+                if idx == 1:  # Aplica solo al segundo elemento (índice 1)
+                    leyenda.append(
+                        mpatches.Patch(
+                            edgecolor=colores[idx],  # Color del borde
+                            facecolor='none',  # Sin relleno
+                            linewidth=2,  # Grosor del borde
+                            label=intersected['Name'].iloc[0],
+                            alpha=transparencias[idx]
+                        )
+                    )
+                else:
+                    leyenda.append(
+                        mpatches.Patch(
+                            color=colores[idx],  # Color normal (relleno)
+                            label=intersected['Name'].iloc[0],
+                            alpha=transparencias[idx]
+                        )
+                    )
 
         # Añadir un mapa base
         try:
@@ -638,6 +690,345 @@ def generar_imagen_con_capas_transparecia(shapefile_path, shapefile_paths, outpu
         plt.close()
 
         # print(f"Imagen PNG generada exitosamente en: {output_png_path}")
+
+    except Exception as e:
+        print(f"Error: {e}")
+
+
+
+def generar_imagen_con_capas_transparecia1(shapefile_path, shapefile_paths, output_png_path, colores, transparencias,
+                                          buffer_km=0.8):
+    try:
+        gdfref = gpd.read_file(shapefile_path)
+        if "Name" in gdfref.columns:
+            gdfref = gdfref.rename(columns={"Name": "nn"})
+        gdfref['geometry'] = gdfref['geometry'].apply(lambda geom: make_valid(geom) if not geom.is_valid else geom)
+
+        if gdfref.crs.to_string() != 'EPSG:3857':
+            gdfref = gdfref.to_crs('EPSG:3857')
+
+        if len(shapefile_paths) != len(colores) or len(shapefile_paths) != len(transparencias):
+            raise ValueError("The number of layers must match the number of colours and transparencies.")
+
+        xmin, ymin, xmax, ymax = gdfref.total_bounds
+        buffer_m = buffer_km * 1000
+        buffer_box = box(xmin - buffer_m, ymin - buffer_m, xmax + buffer_m, ymax + buffer_m)
+        gdf_buffer = gpd.GeoDataFrame(geometry=[buffer_box], crs=gdfref.crs)
+
+        fig, ax = plt.subplots(figsize=(15, 10))
+        leyenda = []
+
+        # Graficar capas base con transparencia
+        for idx, files in enumerate(shapefile_paths):
+            gdf = gpd.read_file(files)
+            gdf['geometry'] = gdf['geometry'].apply(lambda geom: make_valid(geom) if not geom.is_valid else geom)
+            if gdf.crs.to_string() != gdfref.crs.to_string():
+                gdf = gdf.to_crs(gdfref.crs)
+            gdf_clipped = gpd.clip(gdf, gdf_buffer)
+
+            # Estilos base
+            if idx == 1:
+                gdf_clipped.plot(ax=ax, edgecolor=colores[idx], facecolor='none', alpha=transparencias[idx] ,
+                                 linewidth=1.5)
+            elif idx == 2:
+                gdf_clipped.plot(
+                    ax=ax,
+                    edgecolor='none',  # Sin borde
+                    facecolor=colores[idx],  # Relleno amarillo intenso
+                    alpha=transparencias[idx],  # Transparencia para el relleno
+                    linewidth=0  # Sin líneas de borde
+                )
+            elif idx == 0:
+                # Tercera capa: relleno verde intenso
+                gdf_clipped.plot(
+                    ax=ax,
+                    edgecolor='none',  # Sin borde
+                    facecolor=colores[idx],  # Relleno verde intenso
+                    alpha=transparencias[idx],  # Transparencia para el relleno
+                    linewidth=0  # Sin líneas de borde
+                )
+
+        # Polígono de referencia
+        gdfref.plot(ax=ax, edgecolor='black', facecolor='none', linewidth=2.5)
+
+        # Máscara de opacidad exterior
+        exterior_polygon = np.array([
+            [xmin - buffer_m, ymin - buffer_m],
+            [xmax + buffer_m, ymin - buffer_m],
+            [xmax + buffer_m, ymax + buffer_m],
+            [xmin - buffer_m, ymax + buffer_m]
+        ])
+        exterior_patch = Polygon(exterior_polygon, closed=True, facecolor='white', alpha=0.5, edgecolor='none')
+        ax.add_patch(exterior_patch)
+
+        combined_layer = None
+        for idx, files in enumerate(shapefile_paths):
+            gdf = gpd.read_file(files)
+            gdf['geometry'] = gdf['geometry'].apply(lambda geom: make_valid(geom) if not geom.is_valid else geom)
+            if gdf.crs.to_string() != gdfref.crs.to_string():
+                gdf = gdf.to_crs(gdfref.crs)
+            gdf_clipped = gpd.clip(gdf, gdf_buffer)
+
+            # Intersección clave
+            intersected = gpd.overlay(gdf_clipped, gdfref, how='intersection')
+
+            if not intersected.empty:
+                if combined_layer is not None and not combined_layer.empty:
+                    intersected = gpd.overlay(intersected, combined_layer, how='difference')
+
+                if not intersected.empty:
+                    if combined_layer is None or combined_layer.empty:
+                        combined_layer = intersected.copy()
+                    else:
+                        combined_layer = pd.concat([combined_layer, intersected], ignore_index=True)
+
+                    # Graficar intersección
+                    if idx == 1:
+                        intersected.plot(ax=ax, edgecolor=colores[idx], facecolor='none', alpha=transparencias[idx],
+                                         linewidth=1.5)
+                    else:
+                        intersected.plot(ax=ax, edgecolor='none', facecolor=colores[idx], alpha=transparencias[idx],
+                                         linewidth=0)
+
+                    # Leyenda para intersecciones válidas
+                    if 'Name' in intersected.columns and not intersected.empty:
+                        if idx == 1:  # Aplicar estilo solo al segundo color (índice 1)
+                            leyenda.append(
+                                mpatches.Patch(
+                                    edgecolor=colores[idx],  # Color del borde
+                                    facecolor='none',  # Sin relleno
+                                    linewidth=2,  # Grosor del borde
+                                    label=gdf['Name'].iloc[0],
+                                    alpha=transparencias[idx]
+                                )
+                            )
+                        else:
+                            leyenda.append(
+                                mpatches.Patch(
+                                    color=colores[idx],  # Color normal (relleno y borde)
+                                    label=gdf['Name'].iloc[0],
+                                    alpha=transparencias[idx]
+                                )
+                            )
+                        # leyenda.append(mpatches.Patch(
+                        #     color=colores[idx] if idx != 1 else 'none',
+                        #     edgecolor=colores[idx] if idx == 1 else 'none',
+                        #     label=intersected['Name'].iloc[0],
+                        #     alpha=transparencias[idx],
+                        #     linewidth=1.5 if idx == 1 else 0
+                        # ))
+                    else:
+                        leyenda.append(mpatches.Patch(
+                            color=colores[idx] if idx != 1 else 'none',
+                            edgecolor=colores[idx] if idx == 1 else 'none',
+                            label=f"Layer {idx + 1}",
+                            alpha=transparencias[idx],
+                            linewidth=1.5 if idx == 1 else 0
+                        ))
+                else:
+                    # Caso donde la diferencia resulta vacía
+                    leyenda.append(mpatches.Patch(
+                        color=colores[idx] if idx != 1 else 'none',
+                        edgecolor=colores[idx] if idx == 1 else 'none',
+                        label=f"Layer {idx + 1} (no NbS)",
+                        alpha=transparencias[idx],
+                        linewidth=1.5 if idx == 1 else 0
+                    ))
+            else:
+                # Caso sin intersección inicial
+                leyenda.append(mpatches.Patch(
+                    color=colores[idx] if idx != 1 else 'none',
+                    edgecolor=colores[idx] if idx == 1 else 'none',
+                    label=f"Layer {idx + 1} (no NbS)",
+                    alpha=transparencias[idx],
+                    linewidth=1.5 if idx == 1 else 0
+                ))
+
+        # Mapa base y elementos finales
+        try:
+            ctx.add_basemap(ax, crs=gdf.crs.to_string(), source="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png")
+        except:
+            ctx.add_basemap(ax, crs=gdf.crs.to_string(), source=ctx.providers.OpenStreetMap.Mapnik)
+
+        ax.set_xlim(xmin - buffer_m, xmax + buffer_m)
+        ax.set_ylim(ymin - buffer_m, ymax + buffer_m)
+        ax.tick_params(axis='both', which='major', labelsize=10, labelcolor='gray')
+
+        # Símbolo del norte
+        north_arrow_path = obtener_ruta_data("Simbolo.png")
+        try:
+            north_arrow_img = plt.imread(north_arrow_path)
+            imagebox = OffsetImage(north_arrow_img, zoom=0.1)
+            ab = AnnotationBbox(imagebox,
+                                (xmin - buffer_m + buffer_m * 0.1, ymax + buffer_m - buffer_m * 0.1),
+                                frameon=False,
+                                box_alignment=(0, 1))
+            ax.add_artist(ab)
+        except Exception as e:
+            print(f"Error adding north symbol: {e}")
+
+        ax.legend(handles=leyenda, loc='lower right', title="Legend")
+        plt.savefig(output_png_path, dpi=300, bbox_inches='tight')
+        plt.close()
+
+    except Exception as e:
+        print(f"Error: {e}")
+
+
+def generar_imagen_con_capas_transparecia(shapefile_path, shapefile_paths, output_png_path, colores, transparencias,
+                                          buffer_km=0.8):
+    try:
+        gdfref = gpd.read_file(shapefile_path)
+        if "Name" in gdfref.columns:
+            gdfref = gdfref.rename(columns={"Name": "nn"})
+        gdfref['geometry'] = gdfref['geometry'].apply(lambda geom: make_valid(geom) if not geom.is_valid else geom)
+
+        if gdfref.crs.to_string() != 'EPSG:3857':
+            gdfref = gdfref.to_crs('EPSG:3857')
+
+        if len(shapefile_paths) != len(colores) or len(shapefile_paths) != len(transparencias):
+            raise ValueError("The number of layers must match the number of colours and transparencies.")
+
+        xmin, ymin, xmax, ymax = gdfref.total_bounds
+        buffer_m = buffer_km * 1000
+        buffer_box = box(xmin - buffer_m, ymin - buffer_m, xmax + buffer_m, ymax + buffer_m)
+        gdf_buffer = gpd.GeoDataFrame(geometry=[buffer_box], crs=gdfref.crs)
+
+        fig, ax = plt.subplots(figsize=(15, 10))
+        leyenda = []
+
+        # Graficar capas completas dentro del buffer
+        for idx, files in enumerate(shapefile_paths):
+            gdf = gpd.read_file(files)
+            gdf['geometry'] = gdf['geometry'].apply(lambda geom: make_valid(geom) if not geom.is_valid else geom)
+            if gdf.crs.to_string() != gdfref.crs.to_string():
+                gdf = gdf.to_crs(gdfref.crs)
+            gdf_clipped = gpd.clip(gdf, gdf_buffer)
+
+            # Estilos específicos para cada capa
+            if idx == 1:
+                gdf_clipped.plot(ax=ax, edgecolor=colores[idx], facecolor='none', alpha=transparencias[idx],
+                                 linewidth=1.5)
+            elif idx == 2:
+                gdf_clipped.plot(ax=ax, edgecolor='none', facecolor=colores[idx], alpha=transparencias[idx],
+                                 linewidth=0)
+            elif idx == 0:
+                gdf_clipped.plot(ax=ax, edgecolor='none', facecolor=colores[idx], alpha=transparencias[idx],
+                                 linewidth=0)
+
+        gdfref.plot(ax=ax, edgecolor='black', facecolor='none', linewidth=2.5)
+
+        # Máscara para opacar el exterior
+        exterior_polygon = np.array([
+            [xmin - buffer_m, ymin - buffer_m],
+            [xmax + buffer_m, ymin - buffer_m],
+            [xmax + buffer_m, ymax + buffer_m],
+            [xmin - buffer_m, ymax + buffer_m]
+        ])
+        exterior_patch = Polygon(exterior_polygon, closed=True, facecolor='white', alpha=0.5, edgecolor='none')
+        ax.add_patch(exterior_patch)
+
+        combined_layer = None
+        for idx, files in enumerate(shapefile_paths):
+            gdf = gpd.read_file(files)
+            gdf['geometry'] = gdf['geometry'].apply(lambda geom: make_valid(geom) if not geom.is_valid else geom)
+            if gdf.crs.to_string() != gdfref.crs.to_string():
+                gdf = gdf.to_crs(gdfref.crs)
+            gdf_clipped = gpd.clip(gdf, gdf_buffer)
+            try:
+                intersected = gpd.overlay(gdf_clipped, gdfref, how='intersection')
+            except:
+
+                def filtrar_geom_validas(gdf):
+                    """
+                    Filtra y convierte GeometryCollection en geometrías válidas (Polygon/MultiPolygon).
+                    """
+                    from shapely.geometry import GeometryCollection, MultiPolygon
+                    geoms_validas = []
+                    for geom in gdf.geometry:
+                        if geom is None:
+                            continue
+                        if isinstance(geom, GeometryCollection):
+                            partes_validas = [g for g in geom.geoms if isinstance(g, (Polygon, MultiPolygon))]
+                            if partes_validas:
+                                union_geom = unary_union(partes_validas)
+                                geoms_validas.append(union_geom)
+                        elif isinstance(geom, (Polygon, MultiPolygon)):
+                            geoms_validas.append(geom)
+                        else:
+                            # Se ignoran otros tipos como Point, LineString, etc.
+                            continue
+                    return gpd.GeoDataFrame(geometry=geoms_validas, crs=gdf.crs)
+
+
+                # Intento alternativo con geometrías unificadas y corregidas
+                gdf_clipped = filtrar_geom_validas(gdf_clipped)
+
+                intersected = gpd.overlay(gdf_clipped,gdfref, how='intersection')
+            # Manejo de leyenda y capas intersectadas
+            if intersected.empty:
+                layer_name = f"Layer {idx + 1} (no NbS)"
+                if 'Name' in gdf.columns and not gdf.empty:
+                    layer_name = gdf['Name'].iloc[0]
+                # Añadir a leyenda
+                if idx == 1:
+                    leyenda.append(
+                        mpatches.Patch(edgecolor=colores[idx], facecolor='none', linewidth=2, label=layer_name,
+                                       alpha=transparencias[idx]))
+                else:
+                    leyenda.append(mpatches.Patch(color=colores[idx], label=layer_name, alpha=transparencias[idx]))
+            else:
+                if combined_layer is not None:
+                    intersected = gpd.overlay(intersected, combined_layer, how='difference')
+                combined_layer = pd.concat([combined_layer, intersected],
+                                           ignore_index=True) if combined_layer is not None else intersected.copy()
+
+                # Graficar capa intersectada
+                if idx == 1:
+                    intersected.plot(ax=ax, edgecolor=colores[idx], facecolor='none', alpha=transparencias[idx],
+                                     linewidth=1.5)
+                elif idx == 2:
+                    intersected.plot(ax=ax, edgecolor='none', facecolor=colores[idx], alpha=transparencias[idx],
+                                     linewidth=0)
+                elif idx == 0:
+                    intersected.plot(ax=ax, edgecolor='none', facecolor=colores[idx], alpha=transparencias[idx],
+                                     linewidth=0)
+
+                # Añadir a leyenda
+                layer_name = f"Layer {idx + 1}"
+                if 'Name' in intersected.columns and not intersected.empty:
+                    layer_name = intersected['Name'].iloc[0]
+                if idx == 1:
+                    leyenda.append(
+                        mpatches.Patch(edgecolor=colores[idx], facecolor='none', linewidth=2, label=layer_name,
+                                       alpha=transparencias[idx]))
+                else:
+                    leyenda.append(mpatches.Patch(color=colores[idx], label=layer_name, alpha=transparencias[idx]))
+
+        # Resto del código (mapa base, ejes, símbolo del norte, guardar imagen)
+        try:
+            ctx.add_basemap(ax, crs=gdf.crs.to_string(), source="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png")
+        except:
+            ctx.add_basemap(ax, crs=gdf.crs.to_string(), source=ctx.providers.OpenStreetMap.Mapnik)
+
+        ax.set_xlim(xmin - buffer_m, xmax + buffer_m)
+        ax.set_ylim(ymin - buffer_m, ymax + buffer_m)
+        ax.tick_params(axis='both', which='major', labelsize=10, labelcolor='gray')
+
+        # Símbolo del norte (manejo de errores incluido)
+        north_arrow_path = obtener_ruta_data("Simbolo.png")
+        try:
+            north_arrow_img = plt.imread(north_arrow_path)
+            imagebox = OffsetImage(north_arrow_img, zoom=0.1)
+            ab = AnnotationBbox(imagebox, (xmin - buffer_m + buffer_m * 0.1, ymax + buffer_m - buffer_m * 0.1),
+                                frameon=False)
+            ax.add_artist(ab)
+        except Exception as e:
+            print(f"Error adding north symbol: {e}")
+
+        ax.legend(handles=leyenda, loc='lower right', title="Legend")
+        plt.savefig(output_png_path, dpi=300, bbox_inches='tight')
+        plt.close()
 
     except Exception as e:
         print(f"Error: {e}")
@@ -800,6 +1191,8 @@ def calcular_area_files_shp(polygon_path, shp_path, field, count_polygons=False)
     try:
         # Leer el shapefile del polígono y la capa de interés
         gdf_polygon = gpd.read_file(polygon_path)
+        if "Name" in gdf_polygon.columns:
+            gdf_polygon = gdf_polygon.rename(columns={"Name": "nn"})
 
         if gdf_polygon.crs.to_string() != 'EPSG:27700':
             gdf_polygon = gdf_polygon.to_crs('EPSG:27700')
@@ -896,7 +1289,8 @@ def procesar_intersecciones_y_mascara(gdfref_path, shapefile_paths, raster_path,
                     'Runoff': 'mm/yr'}
     # Leer el shapefile de referencia
     gdfref = gpd.read_file(gdfref_path)
-
+    if "Name" in gdfref.columns:
+        gdfref = gdfref.rename(columns={"Name": "nn"})
     # Asegurar que el CRS esté en EPSG:27700 para trabajar con mapas base
     if gdfref.crs.to_string() != 'EPSG:27700':
         gdfref = gdfref.to_crs('EPSG:27700')# Inicializar variables de resultados
@@ -1005,14 +1399,17 @@ def procesar_nbs_y_raster_individual(polygon_path, shapefile_paths, raster_path,
 
     diccio_units = {
         'BNG': 'BNG Units',
-        'Nitrogen': 'Nitrogen Export Reduction kg/yr',
-        'Phosphorus': 'Phosphorus Export Reduction kg/yr',
+        'Nitrogen': 'NER kg/yr', #Nitrogen Export Reduction
+        'Phosphorus': 'PER kg/yr',#Phosphorus Export Reduction
         'Recharge': 'Infiltration uplift m3/yr',
         'Runoff': 'Runoff Reduction m3/yr'
     }
 
     # Leer el shapefile de referencia
     gdf_polygon = gpd.read_file(polygon_path)
+
+    if "Name" in gdf_polygon.columns:
+        gdf_polygon = gdf_polygon.rename(columns={"Name": "nn"})
 
     # Asegurar que el CRS esté en EPSG:27700
     if gdf_polygon.crs.to_string() != 'EPSG:27700':
@@ -1120,6 +1517,203 @@ def procesar_nbs_y_raster_individual(polygon_path, shapefile_paths, raster_path,
     # Crear DataFrame con los resultados
     resultados_df = pd.DataFrame(resultados)
     return resultados_df
+def procesar_nbs_combinado_y_puntos_2(gdf_combined, shapefile_paths_puntos, raster_path, Sufix):
+    """
+    Procesa una capa combinada de polígonos (ya intersectada y filtrada) y capas de puntos
+    para calcular estadísticas sobre un raster o sobre campos específicos.
+
+    Parámetros:
+    - gdf_combined: GeoDataFrame con geometrías combinadas de NbS filtradas.
+    - shapefile_paths_puntos: Lista de rutas a shapefiles de puntos (ej. cRAF, sRAF).
+    - raster_path: Ruta del archivo raster (.tif).
+    - Sufix: Identificador del tipo de variable: 'Nitrogen', 'Phosphorus', 'Runoff', 'Recharge'.
+
+    Retorna:
+    - DataFrame con valores calculados para las NbS de interés.
+    """
+    import geopandas as gpd
+    import pandas as pd
+    import numpy as np
+    import rasterio
+    from rasterio.mask import mask
+
+    diccio_units = {
+        'BNG': 'BNG Units',
+        'Nitrogen': 'NER kg/yr',
+        'Phosphorus': 'PER kg/yr',
+        'Recharge': 'Infiltration uplift m3/yr',
+        'Runoff': 'Runoff Reduction m3/yr'
+    }
+
+    nbs_mappings = {
+        'RZ_Opmap_PRIO': 'Riparian Zone Restoration',
+        'FZ_Final_merge_FROP': 'Floodplain reconnection and restoration',
+        'SM_Opmap_PRIO': 'Soil Management',
+    }
+
+    resultados = []
+
+    # Filtrar geometrías de interés
+    for original_name, display_name in nbs_mappings.items():
+        gdf_nbs = gdf_combined[gdf_combined['source'] == original_name] if 'source' in gdf_combined.columns else gdf_combined[gdf_combined['Name'] == original_name]
+        if gdf_nbs.empty:
+            continue
+
+        with rasterio.open(raster_path) as src:
+            raster_crs = src.crs.to_string()
+            if raster_crs != gdf_nbs.crs.to_string():
+                raise ValueError("CRS del raster no coincide con el de los polígonos.")
+
+            pixel_size_m = src.res[0] * src.res[1]
+            pixel_size_ha = pixel_size_m / 10000
+
+            geom_list = [geom for geom in gdf_nbs.geometry]
+            out_image, out_transform = mask(src, geom_list, crop=True)
+            nodata = src.nodata
+
+            if np.isnan(nodata):
+                valid_pixels = out_image[~np.isnan(out_image)]
+            else:
+                valid_pixels = out_image[out_image != nodata]
+
+            adjust_raster = valid_pixels * pixel_size_ha
+            Total_Uplift = np.round(np.sum(adjust_raster), 2)
+
+            resultados.append({
+                'NBS': display_name,
+                f'{diccio_units[Sufix]}': Total_Uplift if len(adjust_raster) > 0 else 0
+            })
+
+    # Procesar capas de puntos (cRAF, sRAF)
+    total_puntos = 0.0
+    campo = {
+        'Nitrogen': 'N_remvl',
+        'Phosphorus': 'P_remvl',
+        'Runoff': 'Wtr_Cp_',
+        'Recharge': 'Recharg'
+    }.get(Sufix)
+
+    if not campo:
+        raise ValueError(f"Sufijo no válido para capas de puntos: {Sufix}")
+
+    for shp_path in shapefile_paths_puntos:
+        gdf_puntos = gpd.read_file(shp_path)
+
+        # Reproyectar a EPSG:27700 si no coincide
+        if gdf_puntos.crs.to_string() != gdf_combined.crs.to_string():
+            gdf_puntos = gdf_puntos.to_crs(gdf_combined.crs)
+
+        gdf_puntos = gdf_puntos.drop_duplicates(subset=['geometry'])
+        union_geom = gdf_combined.unary_union
+        puntos_dentro = gdf_puntos[gdf_puntos.within(union_geom)]
+
+        if campo not in puntos_dentro.columns:
+            raise ValueError(f"Campo {campo} no encontrado en capa de puntos.")
+
+        total_puntos += puntos_dentro[campo].sum()
+
+    if total_puntos > 0:
+        resultados.append({
+            'NBS': 'Runoff Attenuation Features',
+            f'{diccio_units[Sufix]}': round(total_puntos, 2)
+        })
+
+    return pd.DataFrame(resultados)
+def procesar_nbs_combinado_y_puntos(gdf_combined, raster_path, Sufix, nbs_mappings, shapefile_paths_puntos=None):
+    """
+    Procesa una capa combinada de polígonos (ya intersectada y filtrada) y opcionalmente capas de puntos
+    para calcular estadísticas sobre un raster o sobre campos específicos.
+
+    Parámetros:
+    - gdf_combined: GeoDataFrame con geometrías combinadas de NbS filtradas.
+    - raster_path: Ruta del archivo raster (.tif).
+    - Sufix: Identificador del tipo de variable: 'Nitrogen', 'Phosphorus', 'Runoff', 'Recharge'.
+    - nbs_mappings: Diccionario con claves del nombre de geometrías en 'source' y valores legibles para mostrar.
+    - shapefile_paths_puntos: Lista de rutas a shapefiles de puntos (ej. cRAF, sRAF). Opcional.
+
+    Retorna:
+    - DataFrame con valores calculados para las NbS de interés.
+    """
+    import geopandas as gpd
+    import pandas as pd
+    import numpy as np
+    import rasterio
+    from rasterio.mask import mask
+
+    diccio_units = {
+        'BNG': 'BNG Units',
+        'Nitrogen': 'NER kg/yr',
+        'Phosphorus': 'PER kg/yr',
+        'Recharge': 'Infiltration uplift m3/yr',
+        'Runoff': 'Runoff Reduction m3/yr'
+    }
+
+    resultados = []
+
+    # Procesar geometrías tipo polígono
+    for source_name, display_name in nbs_mappings.items():
+        gdf_nbs = gdf_combined[gdf_combined['source'] == source_name]
+        if gdf_nbs.empty:
+            continue
+
+        with rasterio.open(raster_path) as src:
+            if src.crs.to_string() != gdf_nbs.crs.to_string():
+                raise ValueError("CRS del raster no coincide con el de los polígonos.")
+
+            pixel_size_ha = (src.res[0] * src.res[1]) / 10000
+            geom_list = [geom for geom in gdf_nbs.geometry]
+            out_image, out_transform = mask(src, geom_list, crop=True)
+            nodata = src.nodata
+
+            if np.isnan(nodata):
+                valid_pixels = out_image[~np.isnan(out_image)]
+            else:
+                valid_pixels = out_image[out_image != nodata]
+
+            adjust_raster = valid_pixels * pixel_size_ha
+            Total_Uplift = np.round(np.sum(adjust_raster), 2)
+
+            resultados.append({
+                'NBS': display_name,
+                f'{diccio_units[Sufix]}': Total_Uplift if len(adjust_raster) > 0 else 0
+            })
+
+    # Procesar capas de puntos si se proporcionan
+    if shapefile_paths_puntos:
+        campo = {
+            'Nitrogen': 'N_remvl',
+            'Phosphorus': 'P_remvl',
+            'Runoff': 'Wtr_Cp_',
+            'Recharge': 'Recharg'
+        }.get(Sufix)
+
+        if not campo:
+            raise ValueError(f"Sufijo no válido para capas de puntos: {Sufix}")
+
+        total_puntos = 0.0
+
+        for shp_path in shapefile_paths_puntos:
+            gdf_puntos = gpd.read_file(shp_path)
+            if gdf_puntos.crs.to_string() != gdf_combined.crs.to_string():
+                gdf_puntos = gdf_puntos.to_crs(gdf_combined.crs)
+
+            gdf_puntos = gdf_puntos.drop_duplicates(subset=['geometry'])
+            union_geom = gdf_combined.unary_union
+            puntos_dentro = gdf_puntos[gdf_puntos.within(union_geom)]
+
+            if campo not in puntos_dentro.columns:
+                raise ValueError(f"Campo {campo} no encontrado en capa de puntos.")
+
+            total_puntos += puntos_dentro[campo].sum()
+
+        if total_puntos > 0:
+            resultados.append({
+                'NBS': 'Runoff Attenuation Features',
+                f'{diccio_units[Sufix]}': round(total_puntos, 2)
+            })
+
+    return pd.DataFrame(resultados)
+
 def contar_puntos_intersectados(polygon_path, shapefile_paths, buffer_distance=5):
     """
     Cuenta la cantidad de puntos dentro del polígono de referencia (con buffer aplicado),
@@ -1209,6 +1803,9 @@ def procesar_nbs_y_raster_combinado(polygon_path, shapefile_paths, raster_path, 
 
     # Leer el shapefile de referencia
     gdf_polygon = gpd.read_file(polygon_path)
+
+    if "Name" in gdf_polygon.columns:
+        gdf_polygon = gdf_polygon.rename(columns={"Name": "nn"})
 
     # Asegurar que el CRS esté en EPSG:27700
     if gdf_polygon.crs.to_string() != 'EPSG:27700':
@@ -1367,15 +1964,15 @@ def extract_area_nbs_LUC(Polygon):
     # Diccionario de mapeo
     nbs_info = {
         "Soil Management": {
-            "Description": "These represent in-field measures to decrease runoff and encourage infiltration via the improvement of soil health and structure. Specific interventions include minimum tillage practices and the introduction of cover crops.",
-            "Local Context": "Managing crop types to those utilising lower water budgets may provide greater water availability to the soil and reduce soil moisture deficits improving recharge capabilities and reducing the period channels remain ephemeral"
+            "Description": "These represent in-field measures to decrease runoff and encourage infiltration via the improvement of soil health and structure. Specific interventions include minimum tillage practices, edge-of-field buffer strips re 2m wide and the introduction of cover crops.",
+            "Local Context": "Managing crop types to those utilising lower water budgets may provide greater water availability to the soil and reduce soil moisture deficits improving recharge capabilities and reducing the period channels remain ephemeral, "
         },
         "Land Use Change": {
             "Description": "The interventions include specific areas of arable land or improved grassland that should be prioritized for land use change.",
             "Local Context": "The density of features is highest on the till covered hill in the south.  On the chalk, they concentrate along topographical depressions draining into rivers.  The most effective locations to target are likely to be those on the edge of the chalk, which are likely to be active more often capturing the run-off from the till.  Those that start on the chalk will likely have less run-off entering them on average."
         },
         "Slowly Permeable Soils": {
-            "Description": "The interventions include areas with impeded soil permeability and superficial till cover.",
+            "Description": "These interventions include areas with impeded soil permeability and superficial till cover. These represent priority areas for the implementation of Soil Management (see the interventions below).",
             "Local Context": "A significant cover of features are delineated over the expanse of till mainly on the plateau area.  Improved land cover management such as use of tree/grass buffer strips and shelter belts may slow flows and enhance aquifer recharge and provide water quality benefits.  The Very high infiltration areas are on the edge and show where the till is thinning and so may allow more recharge through."
         }
     }
@@ -1397,6 +1994,175 @@ def extract_area_nbs_LUC(Polygon):
     nbs_result["Local Context"] =   nbs_result ["NbS"].map(lambda x: nbs_info[x]["Local Context"])
 
     return nbs_result
+
+
+def calcular_areas_optimizado(Polygon):
+    # Configuración inicial
+    nbs_mapping = {
+        'Wen_CS_Update': 'Runoff Attenuation Features',
+        'FZ_Final_merge_FROP': 'Floodplain reconnection and restoration',
+        'RZ_Opmap_PRIO': 'Riparian Zone Restoration',
+        'LUC_10-perc': 'Land Use Change',
+        'SM_Opmap_PRIO': 'Soil Management',
+        'SPS_Final': 'Slowly Permeable Soils',
+    }
+
+
+    # Cargar y preparar el polígono de referencia
+    gdfref = gpd.read_file(Polygon).to_crs('EPSG:27700')
+    area_total = gdfref.geometry.area.sum() / 10000
+
+    # Procesamiento secuencial de capas
+    combined_layer = None
+    resultados = []
+
+    for archivo, nbs_nombre in nbs_mapping.items():
+        # Cargar y proyectar capa NbS
+        path = obtener_ruta_data('NbS', f'{archivo}.shp')
+        gdf = gpd.read_file(path).to_crs(gdfref.crs)
+
+        # Recortar al área del polígono
+        gdf_clipped = gpd.clip(gdf, gdfref)
+
+        if not gdf_clipped.empty:
+            # Calcular área única no superpuesta
+            if combined_layer is not None and not combined_layer.empty:
+                try:
+                    gdf_unique = gpd.overlay(gdf_clipped, combined_layer, how='difference')
+                except:
+                    combined_fixed = gpd.GeoDataFrame(geometry=[combined_layer.unary_union.buffer(0)],
+                                                      crs=combined_layer.crs)
+                    clipped_fixed = gpd.GeoDataFrame(geometry=[gdf_clipped.unary_union.buffer(0)], crs=gdf_clipped.crs)
+
+                    gdf_unique = gpd.overlay(clipped_fixed, combined_fixed, how='difference')
+            else:
+                gdf_unique = gdf_clipped
+
+            if not gdf_unique.empty:
+                # Calcular área y actualizar capa combinada
+                area_hectareas = gdf_unique.geometry.area.sum() / 10000
+                resultados.append({
+                    'NbS': nbs_nombre,
+                    'Area (Hectares)': round(area_hectareas, 2),
+                    'Area Percentage (%)': round((area_hectareas / area_total) * 100, 2)
+                })
+
+                # Actualizar capa combinada
+                # if combined_layer is None:
+                #     combined_layer = gdf_unique[['geometry']]
+                # else:
+                #     combined_layer = pd.concat([combined_layer, gdf_unique[['geometry']]])
+                # Añadir columna que identifique la fuente NbS original
+                gdf_unique['source'] = archivo  # o usa el nombre original si lo prefieres
+
+                # Actualizar capa combinada
+                if combined_layer is None:
+                    combined_layer = gdf_unique[['geometry', 'source']]
+                else:
+                    combined_layer = pd.concat([combined_layer, gdf_unique[['geometry', 'source']]], ignore_index=True)
+
+    # Construir DataFrame final
+    if not resultados:
+        return pd.DataFrame()
+
+    df_resultado = pd.DataFrame(resultados)
+
+    # Agregar totales y metadata
+    total_area = df_resultado['Area (Hectares)'].sum()
+    df_resultado = pd.concat([
+        df_resultado,
+        pd.DataFrame([{
+            'NbS': 'Total Area',
+            'Area (Hectares)': round(total_area, 2),
+            'Area Percentage (%)': round((total_area / area_total) * 100, 2)
+        }])
+    ], ignore_index=True)
+
+    return df_resultado, combined_layer
+
+
+def combinar_y_calcular1(df_valores, df_areas):
+    # Mapeo de nombres especiales
+    nombre_map = {
+        'Floodplain Zone': 'Floodplain NbS',
+        'Floodplain reconnection and restoration': 'Floodplain NbS'
+    }
+
+    # Normalizar nombres en ambos dataframes
+    df_valores['NbS'] = df_valores['NBS'].replace(nombre_map)
+    df_areas['NbS'] = df_areas['NbS'].replace(nombre_map)
+
+    # Eliminar filas de totales
+    df_areas_sin_total = df_areas[df_areas['NbS'] != 'Total Area']
+
+    # Hacer el merge
+    merged = pd.merge(df_valores.drop('NBS', axis=1),
+                      df_areas_sin_total[['NbS', 'Area (Hectares)']],
+                      on='NbS',
+                      how='left')
+
+    # Calcular nuevas columnas de valor por hectárea
+    value_columns = [col for col in merged.columns if col not in ['NbS', 'Area (Hectares)']]
+
+    for col in value_columns:
+        merged[f'{col}/Ha'] = merged.apply(
+            lambda x: x[col] / x['Area (Hectares)'] if x['Area (Hectares)'] > 0 else 0,
+            axis=1
+        )
+
+    # Reordenar columnas
+    column_order = ['NbS', 'Area (Hectares)'] + \
+                   [col for col in merged.columns if col not in ['NbS', 'Area (Hectares)']]
+
+    # Formatear decimales
+    merged = merged.round(4)
+
+    return merged[column_order].reset_index(drop=True)
+
+
+def combinar_y_calcular(df_valores, df_areas):
+    # Verificar si el dataframe de valores está vacío
+    if df_valores.empty:
+        return pd.DataFrame({'NbS': ['No NbS']})
+
+    # Mapeo de nombres especiales
+    nombre_map = {
+        'Floodplain Zone': 'Floodplain NbS',
+        'Floodplain reconnection and restoration': 'Floodplain NbS'
+    }
+
+    # Normalizar nombres en ambos dataframes
+    df_valores['NbS'] = df_valores['NBS'].replace(nombre_map)
+    df_areas['NbS'] = df_areas['NbS'].replace(nombre_map)
+
+    # Eliminar filas de totales
+    df_areas_sin_total = df_areas[df_areas['NbS'] != 'Total Area']
+
+    # Hacer el merge
+    merged = pd.merge(df_valores.drop('NBS', axis=1),
+                      df_areas_sin_total[['NbS', 'Area (Hectares)']],
+                      on='NbS',
+                      how='left')
+
+    # Calcular nuevas columnas de valor por hectárea
+    value_columns = [col for col in merged.columns if col not in ['NbS', 'Area (Hectares)']]
+
+    for col in value_columns:
+        merged[f'{col}/Ha'] = merged.apply(
+            lambda x: x[col] / x['Area (Hectares)'] if x['Area (Hectares)'] > 0 else 0,
+            axis=1
+        )
+
+    # Reordenar columnas
+    column_order = ['NbS', 'Area (Hectares)'] + \
+                   [col for col in merged.columns if col not in ['NbS', 'Area (Hectares)']]
+
+    # Formatear decimales
+    merged = merged.round(4)
+
+    return merged[column_order].reset_index(drop=True)
+
+
 def determinar_cuenca(polygon_path, cuencas_path):
     """
     Determina la cuenca a la que pertenece el polígono del proyecto.
@@ -1464,12 +2230,12 @@ def calcular_totales_por_area(resul_bng, df_combinado, resul_RF, resul_Rg, area_
         total_biodiversidad_t = resul_bng["BNG Units"].sum()
 
         # Calcular el total de nitrógeno por área
-        total_nitrogeno = df_combinado["Nitrogen Export Reduction kg/yr"].sum() / area_total
-        total_nitrogeno_t = df_combinado["Nitrogen Export Reduction kg/yr"].sum()
+        total_nitrogeno = df_combinado["NER kg/yr"].sum() / area_total
+        total_nitrogeno_t = df_combinado["NER kg/yr"].sum()
 
         # Calcular el total de fósforo por área
-        total_fosforo = df_combinado["Phosphorus Export Reduction kg/yr"].sum() / area_total
-        total_fosforo_t = df_combinado["Phosphorus Export Reduction kg/yr"].sum()
+        total_fosforo = df_combinado["PER kg/yr"].sum() / area_total
+        total_fosforo_t = df_combinado["PER kg/yr"].sum()
 
         # Calcular el total de escorrentía por área
         total_escorrentia = resul_RF["Runoff Reduction m3/yr"].sum() / area_total
@@ -1501,6 +2267,8 @@ def calcular_totales_por_area(resul_bng, df_combinado, resul_RF, resul_Rg, area_
     except Exception as e:
         print(f"Error al calcular los totales por área: {e}")
         return None
+
+
 def determinar_categorias(totales_por_area, cuenca):
     """
     Determina las categorías (Low, Medium, High) para cada clasificación comparando
@@ -1580,6 +2348,7 @@ def determinar_categorias(totales_por_area, cuenca):
     except Exception as e:
         print(f"Error in determining the categories: {e}")
         return None
+
 def exportar_diccionario_a_excel(diccionario, nombre_archivo, ruta):
     """
     Exporta un diccionario de DataFrames a un archivo de Excel, donde cada clave del diccionario
@@ -1616,15 +2385,7 @@ def create_buffer_from_coords(x, y, radius_km, output_path):
     - Un GeoDataFrame con el polígono del buffer.
     """
     
-    #name_project = project_name.get()
 
-    #os.makedirs('Project_' + name_project, exist_ok=True)
-
-    #for folder in ['FIGURES','RESULTS','SHAPEFILES']:
-    #    os.makedirs(r'Project_' + name_project+'/'+folder, exist_ok=True)
-    
-    # Extrae la ruta del directorio
-    #directory = os.path.dirname(output_path)
 
     # Crea los directorios si no existen
     #os.makedirs(directory, exist_ok=True)
@@ -1647,7 +2408,7 @@ def create_buffer_from_coords(x, y, radius_km, output_path):
     return buffer_gdf
     
     
-def generate_pdf_with_results(pdf_path, images, name_project, general, results, resultB, result_Benefit, categorias, nombre_cuenca,
+def generate_pdf_with_results(pdf_path, images, name_project, general, results, resultB,area_all_nbs, result_Benefit, categorias, nombre_cuenca,
                               valores_referencia,totales_project,text_points):
     """
     Genera un PDF horizontal con mapas, resultados y tablas organizadas.
@@ -1739,7 +2500,7 @@ def generate_pdf_with_results(pdf_path, images, name_project, general, results, 
             if y_position - line_spacing < bottom_margin:
                 c.showPage()  # Salto de página
 
-                y_position = page_height - 50  # Reiniciar la posición vertical
+                y_position = page_height - 40  # Reiniciar la posición vertical
                 c.setFont(font_name, font_size)  # Restablecer la fuente después del salto de página
 
             palabras_linea = linea.split()
@@ -2064,14 +2825,14 @@ def generate_pdf_with_results(pdf_path, images, name_project, general, results, 
 
     # Título principal
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(left_margin, page_height - 120, "NbS for water security prioritisation tool – site assessment report")
+    c.drawString(left_margin, page_height - 140, "NbS for water security prioritisation tool – site assessment report")
 
 
 
     c.setFont("Helvetica", 12)
 
-    c.drawString(left_margin, page_height - 150, f"Site Assessment: {name_project}")
-    y_position = page_height - 170
+    c.drawString(left_margin, page_height - 170, f"Site Assessment: {name_project}")
+    y_position = page_height - 190
     texto_0= (f"This assessment report details the background characteristics of "+f"{name_project}"+"  and provides an automatically generated assessment of opportunities to deliver Nature-based Solutions (NbS) on the site. It also provides high-level calculations of potential uplifts which could be achieved through the implementation of recommended interventions. Specifically, it evaluates:."
     )
 
@@ -2258,7 +3019,7 @@ def generate_pdf_with_results(pdf_path, images, name_project, general, results, 
 
     c.setFont("Helvetica-Bold", 12)
     c.drawString(left_margin, y_position, f"Summary of interventions")
-    y_position -= 25
+    y_position -= 20
 
     texto_13= ("Based on the information presented in the tables and maps above, a summary of the proposed NBS interventions is presented below:" )
 
@@ -2285,7 +3046,7 @@ def generate_pdf_with_results(pdf_path, images, name_project, general, results, 
     c.setFont("Helvetica-Bold", 12)
     c.drawString(left_margin, y_position, f"Summary")
     y_position -= 20
-    tex_sum1 = ("Note that the following assessments are performed based on the assumption that all of the NbS opportunities identified in the section above are implemented. ")
+    tex_sum1 = ("Note that the following assessments are performed based on the assumption that all of the NbS opportunities identified in the section above are implemented. Benefits are generally proportional to implementation rate, and therefore assumptions can be made to scale-down results based on implementation e.g. deliver 50% of the total opportunity for Riparian Zone Restoration, generate 50% of the uplifts detailed in this section.")
 
     y_position = agregar_texto_descriptivo(c, tex_sum1 , left_margin, y_position, available_width,"Helvetica-Bold")
 
@@ -2294,11 +3055,11 @@ def generate_pdf_with_results(pdf_path, images, name_project, general, results, 
     tex_sum3 = ("It is assumed that within the target area, the following is delivered:")
     y_position = agregar_texto_descriptivo(c, tex_sum3 , left_margin, y_position, available_width, )
 
-    df_summary = construir_dataframe(resultB, area)
-    agregar_tabla(df_summary, '', flag_title=False)
+    # df_summary = construir_dataframe(resultB, area)
+    agregar_tabla(area_all_nbs, '', flag_title=False)
 
 
-    tex_sum33 = ("** It is important to mention that these nbs suggest the potential for implementation, in the case of ‘Soil Management’ this covers a large part of the territory and in some cases overlaps other NBS, in the determination of benefits the different NBS are prioritised without overcoming any intervention.")
+    tex_sum33 = ("** Discrepancies between areas in this table and the tables in Section 2 stem from the fact that here, NbS interventions are prioritised to make sure that they are non-overlapping and hence not double counted within calculations.")
     y_position = agregar_texto_descriptivo(c, tex_sum33 , left_margin, y_position, available_width, )
 
 
@@ -2368,6 +3129,8 @@ def generate_pdf_with_results(pdf_path, images, name_project, general, results, 
 
     agregar_tabla(result_Benefit["BNG"], '', flag_title=False)
 
+    texto_16_23= ("**Note that calculated uplift values may be small for Floodplain Reconnection interventions as the majority of these are delivered on areas which are already (semi-natural) grassland. Watercourse BNG units may be generated by these interventions, but these are not calculated by this model.")
+    y_position = agregar_texto_descriptivo(c, texto_16_23 , left_margin, y_position, available_width)
 
     c.setFont("Helvetica-Bold", 12)
     c.drawString(left_margin, y_position, f"Nutrient neutrality")
@@ -2377,6 +3140,12 @@ def generate_pdf_with_results(pdf_path, images, name_project, general, results, 
 
     texto_17_2= ("Note that delivery calculations are based on simplifications of the Farmscoper tool and modelling conducted by the Environment Agency and Norfolk Water Strategy Programme." )
     y_position = agregar_texto_descriptivo(c, texto_17_2 , left_margin, y_position, available_width)
+    texto_17_2= ("" )
+    y_position = agregar_texto_descriptivo(c, texto_17_2 , left_margin, y_position, available_width)
+    list_initial_NN = ['NER – Nitrogen Export Reduction', 'PER – Phosphorus Export Reduction']
+    texto_00033 = "\n".join(list_initial_NN)
+    y_position = agregar_texto_vinetas(c, texto_00033, left_margin, y_position, available_width)
+
     agregar_tabla(result_Benefit["NN"], '', flag_title=False)
 
     c.setFont("Helvetica-Bold", 12)
@@ -2917,6 +3686,9 @@ def generate_pdf_with_results(pdf_path, images, name_project, general, results, 
             return y_position
     y_position = agregar_tabla_larga_adjust(c, df_apendix, "", left_margin, y_position, available_width, page_height,
                                      flag_title=False)
+    texto_210 = ("**Modelling presented here represents a scale-down of the methodologies created to support the Norfolk Water Strategy Programme’s business case for Nature-based solutions in the region. For more information and details on the programme, please visit the following link: https://wre.org.uk/projects/norfolk-water-strategy-programme/")
+
+    y_position = agregar_texto_descriptivo(c, texto_210 , left_margin, y_position, available_width)
 
     c.save()
     print("PDF generated successfully.")
@@ -2974,41 +3746,80 @@ def process_information():
             for folder in ['FIGURES','RESULTS','SHAPEFILES']:
                 os.makedirs(r'Project_' + name_project+'/'+folder, exist_ok=True)
 
-
-
             if shapefile_path.get():
                 polygon_path = shapefile_path.get()
 
                 # Leer el shapefile
                 gdf = gpd.read_file(polygon_path)
 
-                # Verificar el CRS
-                if gdf.crs != "EPSG:27700":
-                    # Crear la carpeta para almacenar el shapefile reproyectado
-                    new_path_shp = os.path.join('Project_' + name_project, 'SHAPEFILES')
-                    #os.makedirs(new_path_shp, exist_ok=True)
-                    #new_path_shp = os.path.join(os.path.expanduser('~'), 'Project_' + name_project, 'SHAPEFILES')
-                    
-                    
-                    # Definir la ruta del nuevo shapefile reproyectado
-                    reprojected_shp_path = os.path.join(new_path_shp, 'reprojected_shapefile.shp')
+                # Crear la carpeta donde se almacenarán los shapefiles corregidos
+                new_path_shp = os.path.join('Project_' + name_project, 'SHAPEFILES')
+                os.makedirs(new_path_shp, exist_ok=True)
 
-                    # Reproyectar a EPSG:27700
+                needs_fix = False
+
+                # Verificar geometrías inválidas
+                if not gdf.is_valid.all():
+                    print("⚠️ Invalid geometries found. it is possible that the process failed, please modify the shp..")
+                    gdf['geometry'] = gdf['geometry'].apply(
+                        lambda geom: make_valid(geom) if not geom.is_valid else geom)
+                    # needs_fix = True
+
+                # Corregir líneas no nodeadas (problemas de TopologyException)
+                gdf['geometry'] = gdf['geometry'].apply(
+                    lambda geom: geom.buffer(0) if geom.geom_type in ['LineString', 'MultiLineString'] else geom)
+
+                # Verificar CRS y reproyectar si es necesario
+                if gdf.crs.to_string() != "EPSG:27700":
                     gdf = gdf.to_crs("EPSG:27700")
+                    needs_fix = True
 
-                    # Guardar el shapefile reproyectado
+                # Guardar el shapefile corregido si hubo cambios
+                if needs_fix:
+                    reprojected_shp_path = os.path.join(new_path_shp, 'reprojected_fixed_shapefile.shp')
                     gdf.to_file(reprojected_shp_path)
-
-                    # Actualizar polygon_path con la ruta del shapefile reproyectado
                     polygon_path = reprojected_shp_path
+                    print(f"✅ Layer corrected and saved in: {reprojected_shp_path}")
 
-                #agregar una condicion que lea la capa y sus crs si es diferente a la brutanica que la reproyecte y exporte y asi lea la nueva
             else:
-                # Crear el polígono de buffer
-                new_path_shp = os.path.join('Project_' + name_project, 'SHAPEFILES') 
-                output_shp_path = os.path.join(new_path_shp, "output_buffer.shp") 
-
+                # Crear el polígono de buffer si no hay shapefile
+                new_path_shp = os.path.join('Project_' + name_project, 'SHAPEFILES')
+                output_shp_path = os.path.join(new_path_shp, "output_buffer.shp")
                 polygon_path = output_shp_path
+
+            # if shapefile_path.get():
+            #     polygon_path = shapefile_path.get()
+            #
+            #     # Leer el shapefile
+            #     gdf = gpd.read_file(polygon_path)
+            #
+            #     # Verificar el CRS
+            #     if gdf.crs != "EPSG:27700":
+            #         # Crear la carpeta para almacenar el shapefile reproyectado
+            #         new_path_shp = os.path.join('Project_' + name_project, 'SHAPEFILES')
+            #         #os.makedirs(new_path_shp, exist_ok=True)
+            #         #new_path_shp = os.path.join(os.path.expanduser('~'), 'Project_' + name_project, 'SHAPEFILES')
+            #
+            #
+            #         # Definir la ruta del nuevo shapefile reproyectado
+            #         reprojected_shp_path = os.path.join(new_path_shp, 'reprojected_shapefile.shp')
+            #
+            #         # Reproyectar a EPSG:27700
+            #         gdf = gdf.to_crs("EPSG:27700")
+            #
+            #         # Guardar el shapefile reproyectado
+            #         gdf.to_file(reprojected_shp_path)
+            #
+            #         # Actualizar polygon_path con la ruta del shapefile reproyectado
+            #         polygon_path = reprojected_shp_path
+            #
+            #     #agregar una condicion que lea la capa y sus crs si es diferente a la brutanica que la reproyecte y exporte y asi lea la nueva
+            # else:
+            #     # Crear el polígono de buffer
+            #     new_path_shp = os.path.join('Project_' + name_project, 'SHAPEFILES')
+            #     output_shp_path = os.path.join(new_path_shp, "output_buffer.shp")
+            #
+            #     polygon_path = output_shp_path
 
 
             #General Inputs
@@ -3066,9 +3877,10 @@ def process_information():
 
             NBS_01 =new_path_fig +"Map_nbs01.png"
             console_output.write('Step 2, processing NbS 01 map, extracting area values...')
+
             generar_imagen_con_capas(polygon_path, shapefile_paths, NBS_01, colores, transparencias)
 
-            nbs_result = extract_area_nbs_I(polygon_path)
+
 
 
             shapefile_paths_s = [
@@ -3085,15 +3897,19 @@ def process_information():
             console_output.write('Step 3, processing NbS 02 map, extracting area values...')
             generar_imagen_con_capas_transparecia(polygon_path, shapefile_paths_s, NBS_02, colores_s, transparencias_s)
 
+            nbs_result = extract_area_nbs_I(polygon_path)
             Imagenes = {'Location': image_path,
                         'NBS_01': NBS_01,
                         'NBS_02': NBS_02}
 
             nbs_result_2 = extract_area_nbs_LUC(polygon_path)
 
+
+
             resultsNBS = {"NBS_01": nbs_result,
                           "NBS_02": nbs_result_2}
 
+            result_total_NBS, clip_nbs = calcular_areas_optimizado(polygon_path)
             exportar_diccionario_a_excel(
                 diccionario=resultsNBS,
                 nombre_archivo="02_NbS_"+name_project,
@@ -3111,9 +3927,20 @@ def process_information():
             ]
 
 
+            # result_total_NBS
             raster_BNG = obtener_ruta_data("Benefit","Distributed_BNG_uplift.tif") #'Data/Benefit/Distributed_BNG_uplift.tif'
-            resul_bng = procesar_nbs_y_raster_individual(polygon_path, shapefile_paths, raster_BNG,
-                                                         'BNG')  # Funciona bien
+            # resul_bng = procesar_nbs_y_raster_individual(polygon_path, shapefile_paths, raster_BNG,
+            #                                              'BNG')  # Funciona bien
+            nbs_mappings_bgn = {
+
+                'FZ_Final_merge_FROP': 'Floodplain reconnection and restoration',
+                'RZ_Opmap_PRIO': 'Riparian Zone Restoration',
+                'Wen_CS_Update': 'Runoff Attenuation Features'
+            }
+
+            resul_bng =procesar_nbs_combinado_y_puntos(clip_nbs, raster_BNG, 'BNG', nbs_mappings_bgn, shapefile_paths_puntos=None)
+
+            resul_bng= combinar_y_calcular(resul_bng, result_total_NBS)
 
 
 
@@ -3125,22 +3952,42 @@ def process_information():
                 obtener_ruta_data("Benefit","sRAF_Nutrient_uplift.shp")  # Capa de puntos
             ]
 
+            shapefile_paths_NN2 = [
+                obtener_ruta_data("Benefit","cRAF_Nutrient_uplift.shp"),  # Capa de puntos
+                obtener_ruta_data("Benefit","sRAF_Nutrient_uplift.shp")  # Capa de puntos
+            ]
+
+
             console_output.write('Step 5, processing Nutrient Neutrality benefits...')
 
 
             raster_N =obtener_ruta_data("Benefit","Distributed_Nexp_uplift.tif") # 'Data/Benefit/Distributed_Nexp_uplift.tif'
 
-            resul_N = procesar_nbs_y_raster_individual(polygon_path, shapefile_paths_NN, raster_N,
-                                                       'Nitrogen')  # Funciona bien
+            # resul_N = procesar_nbs_y_raster_individual(polygon_path, shapefile_paths_NN, raster_N,
+            #                                            'Nitrogen')  # Funciona bien
+
+            nbs_mappings_NN = {
+                'RZ_Opmap_PRIO': 'Riparian Zone Restoration',
+                'FZ_Final_merge_FROP': 'Floodplain reconnection and restoration',
+                'SM_Opmap_PRIO': 'Soil Management',
+            }
+
+            resul_N =procesar_nbs_combinado_y_puntos(clip_nbs, raster_N, 'Nitrogen', nbs_mappings_NN , shapefile_paths_puntos=shapefile_paths_NN2)
 
             raster_P = obtener_ruta_data("Benefit","Distributed_Pexp_uplift.tif") #'Data/Benefit/Distributed_Pexp_uplift.tif'
 
-            resul_P = procesar_nbs_y_raster_individual(polygon_path, shapefile_paths_NN, raster_P,
-                                                       'Phosphorus')  # Funciona bien
+            # resul_P = procesar_nbs_y_raster_individual(polygon_path, shapefile_paths_NN, raster_P,
+            #                                            'Phosphorus')  # Funciona bien
 
-            df_combinado = pd.merge(resul_N, resul_P, on='NBS', how='outer')
-            df_combinado.loc[df_combinado['NBS'] != 'Runoff Attenuation Features', df_combinado.select_dtypes(include=['number']).columns] *= -1
+            resul_P = procesar_nbs_combinado_y_puntos(clip_nbs, raster_P, 'Phosphorus', nbs_mappings_NN , shapefile_paths_puntos=shapefile_paths_NN2)
 
+
+            try:
+                df_combinado = pd.merge(resul_N, resul_P, on='NBS', how='outer')
+                df_combinado.loc[df_combinado['NBS'] != 'Runoff Attenuation Features', df_combinado.select_dtypes(include=['number']).columns] *= -1
+            except:
+                df_combinado = resul_P
+            df_combinado = combinar_y_calcular(df_combinado, result_total_NBS)
 
             shapefile_paths_RF = [
                 obtener_ruta_data("NbS","FZ_Final_merge_FROP.shp"),
@@ -3150,19 +3997,38 @@ def process_information():
                 obtener_ruta_data("Benefit","sRAF_Nutrient_uplift.shp")  # Capa de puntos
             ]
 
+            shapefile_paths_RF2 = [
+
+                obtener_ruta_data("Benefit","cRAF_Nutrient_uplift.shp"),  # Capa de puntos
+                obtener_ruta_data("Benefit","sRAF_Nutrient_uplift.shp")  # Capa de puntos
+            ]
+            nbs_mapping_rf = {
+                'RZ_Opmap_PRIO': 'Riparian Zone Restoration',
+                'FZ_Final_merge_FROP': 'Floodplain reconnection and restoration',
+                'SM_Opmap_PRIO': 'Soil Management',
+            }
             console_output.write('Step 6, processing Flooding and Runoff benefits...')
             raster_RF = obtener_ruta_data("Benefit","Distributed_runoff_uplift.tif") #'Data/Benefit/Distributed_runoff_uplift.tif'
 
-            resul_RF = procesar_nbs_y_raster_individual(polygon_path, shapefile_paths_RF, raster_RF,'Runoff')  # Funciona bien
-            resul_RF.loc[resul_RF['NBS'] != 'Runoff Attenuation Features', resul_RF.select_dtypes(include=['number']).columns] *= -1
+            # resul_RF = procesar_nbs_y_raster_individual(polygon_path, shapefile_paths_RF, raster_RF,'Runoff')  # Funciona bien
 
+            resul_RF =procesar_nbs_combinado_y_puntos(clip_nbs, raster_RF, 'Runoff', nbs_mapping_rf , shapefile_paths_puntos=shapefile_paths_RF2)
+            try:
+                resul_RF.loc[resul_RF['NBS'] != 'Runoff Attenuation Features', resul_RF.select_dtypes(include=['number']).columns] *= -1
+            except:
+                resul_RF
+
+
+            resul_RF = combinar_y_calcular(resul_RF, result_total_NBS)
 
             console_output.write('Step 7, processing Infiltration to Groundwater benefits...')
             raster_Rg =obtener_ruta_data("Benefit","Distributed_recharge_uplift.tif") # 'Data/Benefit/Distributed_recharge_uplift.tif'
 
-            resul_Rg = procesar_nbs_y_raster_individual(polygon_path, shapefile_paths_RF, raster_Rg,
-                                                        'Recharge')  # Funciona bien
+            # resul_Rg = procesar_nbs_y_raster_individual(polygon_path, shapefile_paths_RF, raster_Rg,'Recharge')  # Funciona bien
+            resul_Rg = procesar_nbs_combinado_y_puntos(clip_nbs, raster_Rg, 'Recharge', nbs_mapping_rf,  shapefile_paths_puntos=shapefile_paths_RF2)
 
+
+            resul_Rg = combinar_y_calcular(resul_Rg, result_total_NBS)
             shapefile_paths_points = [
                 obtener_ruta_data("Benefit","cRAF_Nutrient_uplift.shp"),  # Capa de puntos
                 obtener_ruta_data("Benefit","sRAF_Nutrient_uplift.shp")  # Capa de puntos
@@ -3196,6 +4062,7 @@ def process_information():
                 general=generalidades,
                 results=results,
                 resultB=resultsNBS,
+                area_all_nbs=result_total_NBS,
                 result_Benefit=Result_oportunidad,
                 categorias=categorias,
                 nombre_cuenca=nombre_cuenca,
@@ -3245,8 +4112,7 @@ def process_buffer():
     else:
         messagebox.showwarning("Input Error", "Please provide a Name project or shapefile or coordinates and radius.")
         
-    
-    
+
 
 
 def start_process():
